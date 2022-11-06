@@ -1,5 +1,8 @@
 
 from __future__ import division
+
+from collections import Counter
+
 import numpy as np
 import matplotlib.pyplot as plt
 import numpy.linalg as la
@@ -200,15 +203,15 @@ def QUEYRANNE(SS, F):
     cluster_max = 0
     partition_value = 0
 
+    vals = {}
     for subset in C:
         cluster_value = F(SS, subset)
         subset_value = cluster_value + F(SS, diff(list(range(dim)), subset))
-        # print(subset_value)
+        vals[tuple(subset)] = subset_value
         if subset_value > max_value:
             # print("a")
             subset_opt = subset
             partition_value = subset_value
             cluster_max = cluster_value
             max_value = subset_value
-
-    return subset_opt, C
+    return Counter.most_common(vals)

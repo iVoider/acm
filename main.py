@@ -8,12 +8,13 @@ import warnings
 
 import numpy as np
 import scipy.linalg
+from community import modularity
+from networkx.algorithms.community import louvain_communities
 from scipy.spatial.distance import directed_hausdorff
+import sage as sp
 
-import weier
-from Queyanne import QUEYRANNE, log_det
-from Sandpile import Sandpile
-from weier import sliced_wasserstein
+from Queyanne import QUEYRANNE
+from Sandpile import sandpile
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -30,7 +31,7 @@ def random_edge(nodes, ignore, used_edges, start):
             return start, choice
 
 
-def generate_rand_digraphs(N, sparse=0.3, dropout=2, isomorphic=True):
+def generate_rand_digraphs(N, sparse=0.3, dropout=8, isomorphic=True):
     A = nx.MultiDiGraph()
     B = nx.MultiDiGraph()
     nodesA = list(range(0, N))
@@ -94,6 +95,7 @@ def generate_rand_digraphs(N, sparse=0.3, dropout=2, isomorphic=True):
 
     return A, B, mapping
 
+
 def m_cutfun(H):
     def f(V, s):
         if type(s) == int:
@@ -102,45 +104,35 @@ def m_cutfun(H):
             s = list(itertools.chain(*(i if isinstance(i, list) else (i,) for i in s)))
             s = [list(H.nodes)[n] for n in s]
 
-        g = H.copy()
-        h = H.copy()
-
-        for n in s:
-            for e in list(g.edges([n])):
-                g.add_edge(e[0], e[1])
-            h.remove_edges_from(list(h.edges([n])))
-
-        for e in list(h.edges):
-            h.add_edge(e[0], e[1])
-
-        adjr = nx.adjacency_matrix(g).toarray().tolist()
-        r = Sandpile(adjr, max_sand=np.max(adjr) + 2).run()
-
-        adjt = nx.adjacency_matrix(h).toarray().tolist()
-        t = Sandpile(adjt, max_sand=np.max(adjt) + 2).run()
-        if not r.any() or not t.any():
+        g = H.subgraph(s)
+        if g.number_of_nodes() < 1 or g.number_of_edges() < 1:
             return 0
-        return weier.sliced_wasserstein(r, t, r.shape[0]) * len(s) * -1
+        return nx.algorithms.community.modularity(g, louvain_communities(g))
+
     return f
 
 
 def solve(A, B):
     def unwind(g):
-         m = nx.adjacency_matrix(g).toarray()
-         cutfun = m_cutfun
-         return QUEYRANNE(m, cutfun(g))
+        m = nx.adjacency_matrix(g).toarray()
+        cutfun = m_cutfun
+        return QUEYRANNE(m, cutfun(g))
+
     return unwind(A), unwind(B)
 
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-     A, B, mapping = generate_rand_digraphs(10, sparse=0.9, isomorphic=True)
-     print(mapping)
-     x,y = solve(A, B)
-     print(nx.is_isomorphic(A, B))
+    A, B, mapping = generate_rand_digraphs(25, dropout=3, sparse=0.6, isomorphic=False)
+    x, y = solve(A, B)
+    print(nx.is_isomorphic(A, B))
 
-     an = list(A.nodes)
-     bn = list(B.nodes)
+    an = list(A.nodes)
+    bn = list(B.nodes)
 
-     print([[an[i] for i in j] for j in x[1]])
-     print([[bn[i] for i in j] for j in y[1]])
+    res_x, val_x = zip(*x)
+    res_y, val_y = zip(*y)
+
+    inv_map = {v: k for k, v in mapping.items()}
+    print(list(zip([[an[i] for i in j] for j in res_x], val_x)))
+    print(list(zip([[inv_map[bn[i]] for i in j] for j in res_y], val_y)))
