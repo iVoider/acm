@@ -111,7 +111,7 @@ def m_cutfun(H, partype=leidenalg.CPMVertexPartition):
             ih = ig.Graph.from_networkx(g)
             part = leidenalg.find_partition(ih, partype)
             #part = [[ih.vs[i]["_nx_name"] for i in j] for j in part]
-            res = ig.community._modularity(ih, part)
+            res = 1.0 - ig.community._modularity(ih, part)
         except:
             res = nx.community.modularity(g, louvain_communities(g))
         return res
@@ -141,20 +141,10 @@ def solve(A, B, mapping, partype=leidenalg.CPMVertexPartition):
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    A, B, mapping = generate_rand_digraphs(20, dropout=3, sparse=0.6, isomorphic=False)
+    A, B, mapping = generate_rand_digraphs(40, dropout=2, sparse=0.6, isomorphic=True)
 
     print(nx.is_isomorphic(A, B))
 
-    x, y = solve(A, B, mapping, leidenalg.CPMVertexPartition)
-    print(x)
-    print(y)
-    print()
     x, y = solve(A, B, mapping, leidenalg.ModularityVertexPartition)
     print(x)
     print(y)
-
-    print()
-    h = ig.Graph.from_networkx(A)
-
-    part = [[h.vs[i]["_nx_name"] for i in j] for j in ig.Graph.community_optimal_modularity(h)]
-    print(part)
