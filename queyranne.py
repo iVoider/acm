@@ -4,12 +4,8 @@ from __future__ import division
 from collections import Counter
 
 import numpy as np
-import matplotlib.pyplot as plt
 import numpy.linalg as la
 import copy
-from itertools import chain, count
-from scipy.linalg import block_diag
-from typing import Any
 
 def trinv(matrix):
     tri = np.trace(la.inv(matrix))
@@ -197,21 +193,9 @@ def QUEYRANNE(SS, F):
         else:
             C.append(subset)
 
-    #  Once we have the list of candidates, we return the best one
-    max_value = -np.Inf
-    subset_opt = []
-    cluster_max = 0
-    partition_value = 0
-
     vals = {}
     for subset in C:
         cluster_value = F(SS, subset)
         subset_value = cluster_value + F(SS, diff(list(range(dim)), subset))
         vals[tuple(subset)] = subset_value
-        if subset_value > max_value:
-            # print("a")
-            subset_opt = subset
-            partition_value = subset_value
-            cluster_max = cluster_value
-            max_value = subset_value
     return Counter.most_common(vals)
