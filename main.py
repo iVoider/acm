@@ -14,13 +14,14 @@ from scipy.spatial.distance import directed_hausdorff
 import sage as sp
 
 from Queyanne import QUEYRANNE
-from Sandpile import sandpile
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import networkx as nx
 import random
 import itertools
+import leidenalg
+import igraph as ig
 
 
 def random_edge(nodes, ignore, used_edges, start):
@@ -95,7 +96,7 @@ def generate_rand_digraphs(N, sparse=0.3, dropout=8, isomorphic=True):
     return A, B, mapping
 
 
-def m_cutfun(H):
+def m_cutfun(H, partype=leidenalg.CPMVertexPartition):
     def f(V, s):
         if type(s) == int:
             s = [list(H.nodes)[s]]
@@ -106,16 +107,23 @@ def m_cutfun(H):
         g = H.subgraph(s)
         if g.number_of_nodes() < 1 or g.number_of_edges() < 1:
             return 0
-        return nx.algorithms.community.modularity(g, louvain_communities(g))
+        try:
+            ih = ig.Graph.from_networkx(g)
+            part = leidenalg.find_partition(ih, partype)
+            #part = [[ih.vs[i]["_nx_name"] for i in j] for j in part]
+            res = ig.community._modularity(ih, part)
+        except:
+            res = nx.community.modularity(g, louvain_communities(g))
+        return res
 
     return f
 
 
-def solve(A, B, mapping):
+def solve(A, B, mapping, partype=leidenalg.CPMVertexPartition):
     def unwind(g):
         m = nx.adjacency_matrix(g).toarray()
         cutfun = m_cutfun
-        return QUEYRANNE(m, cutfun(g))
+        return QUEYRANNE(m, cutfun(g, partype))
 
     x, y = unwind(A), unwind(B)
 
@@ -133,8 +141,20 @@ def solve(A, B, mapping):
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    A, B, mapping = generate_rand_digraphs(40, dropout=3, sparse=0.6, isomorphic=True)
+    A, B, mapping = generate_rand_digraphs(20, dropout=3, sparse=0.6, isomorphic=False)
+
     print(nx.is_isomorphic(A, B))
-    x, y = solve(A, B, mapping)
+
+    x, y = solve(A, B, mapping, leidenalg.CPMVertexPartition)
     print(x)
     print(y)
+    print()
+    x, y = solve(A, B, mapping, leidenalg.ModularityVertexPartition)
+    print(x)
+    print(y)
+
+    print()
+    h = ig.Graph.from_networkx(A)
+
+    part = [[h.vs[i]["_nx_name"] for i in j] for j in ig.Graph.community_optimal_modularity(h)]
+    print(part)
