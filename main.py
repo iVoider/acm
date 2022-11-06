@@ -19,7 +19,6 @@ from Sandpile import sandpile
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import networkx as nx
-import itertools
 import random
 import itertools
 
@@ -112,20 +111,13 @@ def m_cutfun(H):
     return f
 
 
-def solve(A, B):
+def solve(A, B, mapping):
     def unwind(g):
         m = nx.adjacency_matrix(g).toarray()
         cutfun = m_cutfun
         return QUEYRANNE(m, cutfun(g))
 
-    return unwind(A), unwind(B)
-
-
-# Press the green button in the gutter to run the script.
-if __name__ == '__main__':
-    A, B, mapping = generate_rand_digraphs(25, dropout=3, sparse=0.6, isomorphic=False)
-    x, y = solve(A, B)
-    print(nx.is_isomorphic(A, B))
+    x, y = unwind(A), unwind(B)
 
     an = list(A.nodes)
     bn = list(B.nodes)
@@ -134,5 +126,15 @@ if __name__ == '__main__':
     res_y, val_y = zip(*y)
 
     inv_map = {v: k for k, v in mapping.items()}
-    print(list(zip([[an[i] for i in j] for j in res_x], val_x)))
-    print(list(zip([[inv_map[bn[i]] for i in j] for j in res_y], val_y)))
+
+    return list(zip([[an[i] for i in j] for j in res_x], val_x)), list(
+        zip([[inv_map[bn[i]] for i in j] for j in res_y], val_y))
+
+
+# Press the green button in the gutter to run the script.
+if __name__ == '__main__':
+    A, B, mapping = generate_rand_digraphs(40, dropout=3, sparse=0.6, isomorphic=True)
+    print(nx.is_isomorphic(A, B))
+    x, y = solve(A, B, mapping)
+    print(x)
+    print(y)
