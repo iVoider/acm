@@ -1,4 +1,3 @@
-
 from __future__ import division
 
 from collections import Counter
@@ -6,6 +5,7 @@ from collections import Counter
 import numpy as np
 import numpy.linalg as la
 import copy
+
 
 def trinv(matrix):
     tri = np.trace(la.inv(matrix))
@@ -131,23 +131,6 @@ def tr_inv(SS, set):
                 LIST.append(set[i])
 
     return trinv(select_mat(SS, LIST, LIST))
-
-
-def log_det(SS, set):
-    """
-    :rtype: float
-    """
-    if type(set) == int:
-        LIST = [set]
-    else:
-        LIST = []
-        for i in range(len(set)):
-            if type(set[i]) == list:
-                LIST.extend(set[i])
-            else:
-                LIST.append(set[i])
-
-    return -np.log(la.det(select_mat(SS, LIST, LIST)))
 
 
 def fuse(A, B):
