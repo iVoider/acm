@@ -74,7 +74,7 @@ if __name__ == '__main__':
     D = 11
 
     while True:
-     A, B, mapping = generate_problem(D, N, isomorphic=False)
+     A, B, mapping = generate_problem(D, N, isomorphic=True)
      x_g = set()
      y_g = set()
 
