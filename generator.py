@@ -110,7 +110,7 @@ def directed_edge_swap(G, *, nswap=1, max_tries=100, seed=None):
 
     return G
 
-def generate_problem(degree, size, isomorphic):
+def generate_problem(degree, size, isomorphic, directed=True):
     A = random_regular_graph(degree, size)
     #A = random_k_out_graph(size, 3 , 0.6)
     node_mapping = dict(zip(A.nodes(), sorted(A.nodes(), key=lambda k: random.random())))
@@ -127,20 +127,3 @@ def generate_problem(degree, size, isomorphic):
 
     return A, B, node_mapping
 
-def generate_problem_sub(degree, size, isomorphic):
-    A = random_regular_graph(degree, size)
-    #A = random_k_out_graph(size, 3 , 0.6)
-    node_mapping = dict(zip(A.nodes(), sorted(A.nodes(), key=lambda k: random.random())))
-    B = nx.relabel_nodes(A, node_mapping)
-
-    B = B.subgraph(random.sample(list(B.nodes()), 10)).copy()
-    A.remove_nodes_from(list(nx.isolates(A)))
-    B.remove_nodes_from(list(nx.isolates(B)))
-
-    if not isomorphic:
-        B = double_edge_swap(B)
-        #B = directed_edge_swap(B)
-    if isomorphic != nx.isomorphism.GraphMatcher(A, B).subgraph_is_isomorphic():
-        return generate_problem_sub(degree, size, isomorphic)
-
-    return A, B, node_mapping
