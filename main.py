@@ -1,10 +1,9 @@
 import random
 import time
 import warnings
-from enum import Enum
 
 from generator import generate_problem
-from queyranne2 import queyranne
+from queyranne import queyranne
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -15,19 +14,17 @@ import igraph as ig
 
 def f_wrapper(H, seed=None,
               partition_type=leidenalg.ModularityVertexPartition):
-    nodes = list(H.nodes)
 
+    G = ig.Graph.from_networkx(H)
+    nodes_set = set(G.vs.indices)
     def f(s):
 
-        g = H.copy()
-        g.remove_nodes_from(s)
+        g = ig.Graph.subgraph(G, nodes_set - set(s))
 
-        if g.number_of_nodes() < 1 or g.number_of_edges() < 1:
+        if g.vcount() < 1 or g.ecount() < 1:
             return 0
 
-        ih = ig.Graph.from_networkx(g)
-        part = leidenalg.find_partition(ih, partition_type, seed=seed)
-        return 1.0 - ig.community._modularity(ih, part)
+        return 1.0 - leidenalg.find_partition(g, partition_type, seed=seed).modularity
 
     return f
 
@@ -50,8 +47,11 @@ def solve(A, B, seed=None):
 
 
 if __name__ == '__main__':
-    N = 50
-    D = 5
+    N = 100
+    D = 9
 
-    A, B, mapping = generate_problem(D, N, isomorphic=False, directed=True)
+    A, B, mapping = generate_problem(D, N, isomorphic=True, directed=True)
+
+    start = time.time()
     print(solve(A, B, seed=random.getrandbits(16)))
+    print(time.time() - start)
