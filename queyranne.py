@@ -29,7 +29,9 @@ def queyranne(F,V):
         for x in range(len(S[u - 1])):
             S[u - 1][x] *= -1
     vals = dict(zip([tuple(a) for a in A],s))
-    return Counter.most_common(vals)
+    z = Counter.most_common(vals)
+    a,b = zip(*z)
+    return a
 
 #Implements the pendant pair finding subroutine of Queyranne's algorithm
 #(Queyranne '95)
