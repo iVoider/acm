@@ -1,3 +1,4 @@
+import difflib
 import itertools
 import warnings
 
@@ -7,7 +8,7 @@ import random
 import leidenalg
 import igraph as ig
 import networkx as nx
-from collections import OrderedDict, deque, defaultdict
+from collections import OrderedDict, deque, defaultdict, Counter
 import time
 
 
@@ -104,7 +105,7 @@ def generate_problem_sub(degree, size, isomorphic):
             break
 
     node_mapping = dict(zip(A.nodes(), sorted(A.nodes(), key=lambda k: random.random())))
-    B = nx.relabel_nodes(A, node_mapping)
+    B = A.copy()
 
     rm = random.sample(list(B.nodes()), 10)
     B.remove_nodes_from(rm)
@@ -116,7 +117,7 @@ def generate_problem_sub(degree, size, isomorphic):
     if isomorphic != nx.isomorphism.GraphMatcher(A, B).subgraph_is_isomorphic():
         return generate_problem_sub(degree, size, isomorphic)
 
-    return A, B, node_mapping, rm
+    return A, B
 
 
 def topological_nodes(G, GN):
@@ -139,133 +140,78 @@ def topological_edges(G, GE):
     return list(VN.keys())
 
 
-def traverse(L_N, L_E, G):
-    Q = deque()
-    used = dict.fromkeys(L_N, False)
-    S = list()
-
-    res = defaultdict(list)
-    for i, j in L_E:
-        res[i].append(j)
-
-    for i, j in L_E:
-        res[j].append(i)
-
-    for k in res:
-        v = list()
-        for p in L_E:
-            for t in res[k]:
-                if (t, k) == p or (k, t) == p:
-                    v.append(t)
-        res[k] = v
-
-    Q.append(L_E[0])
-    used[L_E[0]] = 1
-    label = 2
-    N = list()
-    J = list()
-    while Q:
-        vi, vj = Q.popleft()
-        for v in (res[vi][res[vi].index(vj):] + res[vi][:res[vi].index(vj)]):
-            if not used[v]:
-                Q.append((v, vi))
-                used[v] = label
-                label += 1
-            N.append(v)
-            J.append(leidenalg.find_partition(ig.Graph.from_networkx(G.subgraph(N)),
-                                              leidenalg.ModularityVertexPartition).modularity)
-            S.append(used[v])
-
-    return S, N, J
-
-
-def traverse_2(L_N, L_E, G, CJ):
-    Q = deque()
-    used = dict.fromkeys(L_N, False)
-    S = list()
-
-    res = defaultdict(list)
-    for i, j in L_E:
-        res[i].append(j)
-
-    for i, j in L_E:
-        res[j].append(i)
-
-    for k in res:
-        v = list()
-        for p in L_E:
-            for t in res[k]:
-                if (t, k) == p or (k, t) == p:
-                    v.append(t)
-        res[k] = v
-
-    Q.append(L_E[0])
-    used[L_E[0]] = 1
-    label = 2
-    N = list()
-    J = list()
-    cur = 0
-    while Q:
-        vi, vj = Q.popleft()
-        for v in (res[vi][res[vi].index(vj):] + res[vi][:res[vi].index(vj)]):
-            KN = N + [v]
-            r = leidenalg.find_partition(ig.Graph.from_networkx(G.subgraph(KN)), leidenalg.ModularityVertexPartition).modularity
-            if str(r) == "nan" and str(CJ[cur]) == "nan":
-                chk = True
-            else:
-             chk = r == CJ[cur]
-
-            if not used[v] and chk:
-                Q.append((v, vi))
-                used[v] = label
-                label += 1
-            if chk:
-             N.append(v)
-             J.append(leidenalg.find_partition(ig.Graph.from_networkx(G.subgraph(N)),
-                                              leidenalg.ModularityVertexPartition).modularity)
-             S.append(used[v])
-             cur += 1
-             if len(J) == len(CJ):
-                 return S,N,J
-
-    return S, N, J
-
-
-def solve(G, H, mi):
+def solve(G, H):
     LG = nx.line_graph(G)
     LH = nx.line_graph(H)
     GN, HN = are_isomorphic(G, H, linear=False)
     GE, HE = are_isomorphic(LG, LH, linear=True)
-
-    m = {v: k for k, v in mi.items()}
 
     gtn = topological_nodes(G, GN)
     htn = topological_nodes(H, HN)
     gte = topological_edges(G, GE)
     hte = topological_edges(H, HE)
 
-    print(gtn)
-    print([m[i] for i in htn])
-    print(gte)
-    print([(m[i[0]], m[i[1]]) for i in hte])
+    return gtn, htn, gte, hte
 
-    print()
 
-    C1, N1, J1 = traverse(htn, hte, H)
-    C2, N2, J2 = traverse_2(gtn, gte, G, J1)
-    print(C1)
-    print(C2)
-    print()
-    print([m[i] for i in N1])
-    print(N2)
-    print()
-    print(J1)
-    print(J2)
+def assume(gtn, gte, htn, hte):
+    assumptions = defaultdict(list)
+    shift = 0
+    for hn in htn:
+        assumptions[hn] = gtn[shift:len(gtn) - len(htn) + shift + 1]
+        shift += 1
+
+    essumptions = defaultdict(list)
+    shift = 0
+    for he in hte:
+        essumptions[he] = gte[shift:len(gte) - len(hte) + shift + 1]
+        shift += 1
+
+    while True:
+        changed = False
+        for e in essumptions.keys():
+            for j in essumptions[e]:
+                a, b = e
+                x, y = j
+                if x not in assumptions[a] or y not in assumptions[b]:
+                    essumptions[e].remove(j)
+                    changed = True
+
+        for e in essumptions.keys():
+            a, b = zip(*essumptions[e])
+            a = set(a)
+            b = set(b)
+            x, y = e
+            fg = set(assumptions[x]) - a
+            hg = set(assumptions[y]) - b
+
+            if len(fg) > 0:
+                for f in fg:
+                    assumptions[x].remove(f)
+                    changed = True
+
+            if len(hg) > 0:
+                for h in hg:
+                    assumptions[y].remove(h)
+                    changed = True
+
+        if not changed:
+            break
+
+    print(assumptions)
+    print(essumptions)
 
 
 if __name__ == '__main__':
-    N = 25
-    D = 4
+    N = 30
+    D = 5
 
-    G, H, mi, rm = generate_problem_sub(D, N, isomorphic=True)
-    solve(G, H, mi)
+    G, H = generate_problem_sub(D, N, isomorphic=True)
+    gtn, htn, gte, hte = solve(G, H)
+
+    print(gtn)
+    print(htn)
+    print(gte)
+    print(hte)
+
+    assume(gtn, gte, htn, hte)
