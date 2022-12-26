@@ -2,6 +2,8 @@ import random
 import time
 import warnings
 
+from networkx.algorithms.approximation import max_clique
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import itertools
@@ -25,20 +27,36 @@ from collections import OrderedDict, deque, defaultdict, Counter
 import time
 
 
-def queyranne(F, V):
+def queyranne(F,V):
     def Fnew(a):
-        r = []
+        r=[]
         for x in a:
             r += S[x - 1]
         return F(r)
-
     n = len(V)
     S = [[x] for x in V]
+    s = []
+    A = []
     inew = OrderedDict()
-    for x in range(1, n + 1):
+    for x in range(1,n+1):
         inew[x] = x
-    for h in range(n - 1):
-        pendentpair(Fnew, inew)
+    minimum=float("inf")
+    position_of_min=0
+    for h in range(n-1):
+        #Find a pendant pair
+        [t,u] = pendentpair(Fnew,inew)
+        #This gives a candidate solution
+        A.append(S[u - 1].copy())
+        s.append(Fnew({u}))
+        if s[-1] < minimum:
+            minimum = s[-1]
+            position_of_min = len(s) - 1
+        S[t - 1] += S[u - 1]
+        del inew[u]
+        for x in range(len(S[u - 1])):
+            S[u - 1][x] *= -1
+    vals = dict(zip([tuple(a) for a in A],s))
+    return Counter.most_common(vals)
 
 
 def pendentpair(F, V):
@@ -84,31 +102,44 @@ def f_wrapper(G, result, seed):
         if g.vcount() < 1 or g.ecount() < 1:
             return 0
         # for other types (like directed), use:
-        val = 1.0 - ig.community._community_leiden(g).modularity
+        val = 1.0 - leidenalg.find_partition(g, partition_type=leidenalg.ModularityVertexPartition, seed=seed).modularity
         result[s] = val
         return val
 
     return f
 
+def is_complete_graph(G):
+    N = len(G) - 1
+    return not any(n in nbrdict or len(nbrdict)!=N for n, nbrdict in G.adj.items())
 
-def are_isomorphic(G, H, linear):
+def is_subclique(G,nodelist):
+    H = G.subgraph(nodelist)
+    n = len(nodelist)
+    return H.size() == n*(n-1)/2
+
+def solve(G, H, s, linear):
     def optimization(g, linear, seed):
         result = {}
         G = ig.Graph.from_networkx(g)
-        queyranne(f_wrapper(G, result, seed), list(range(0, g.number_of_nodes())))
+        q = queyranne(f_wrapper(G, result, seed), list(range(0, g.number_of_nodes())))
         ret = {}
         for key, value in result.items():
-            ret[tuple(sorted(
-                [(int(G.vs[i]["_nx_name"]) if not linear else tuple(G.vs[i]["_nx_name"])) for i in key]))] = value
-        return ret
+          if len(key) >= s:
+           ret[tuple(sorted(
+           [(int(G.vs[i]["_nx_name"]) if not linear else tuple(G.vs[i]["_nx_name"])) for i in key]))] = value
+        return q
 
     seed = random.getrandbits(16)
-    A = optimization(G, linear, seed)
-    B = optimization(H, linear, seed)
-    return A, B
+    x = optimization(G, linear, seed)
+    y = optimization(nx.line_graph(G), True, seed)
+
+    print(x)
+    print(y[:1], y[-1:])
+
+    return False
 
 
-def generate_problem_sub(degree, size, isomorphic):
+def generate_problem_clique(degree, size, contains):
     while True:
         try:
             A = nx.random_regular_graph(degree, size)
@@ -117,132 +148,15 @@ def generate_problem_sub(degree, size, isomorphic):
         if A != None:
             break
 
-    node_mapping = dict(zip(A.nodes(), sorted(A.nodes(), key=lambda k: random.random())))
-    B = A.copy()
+    M = ig.Graph.from_networkx(A)
 
-    rm = random.sample(list(B.nodes()), 10)
+    largest = M.clique_number()
+    print(M.largest_cliques())
 
-    k = list(B.nodes)
-    random.shuffle(k)
-    H = nx.Graph()
-    H.add_nodes_from(k)
-    H.add_edges_from(B.edges(data=True))
-    B = H
-
-    B.remove_nodes_from(rm)
-    A.remove_nodes_from(list(nx.isolates(A)))
-    B.remove_nodes_from(list(nx.isolates(B)))
-
-    if not isomorphic:
-        B = nx.double_edge_swap(B)
-    if isomorphic != nx.isomorphism.GraphMatcher(A, B).subgraph_is_isomorphic():
-        return generate_problem_sub(degree, size, isomorphic)
-
-    return A, B
-
-
-def topological_nodes(G, GN):
-    VN = dict.fromkeys(G.nodes, (0, 0))
-    for k, v in GN.items():
-        for e in k:
-            VN[e] = (VN[e][0] + v, VN[e][1] + 1)
-    for k in VN:
-        VN[k] = VN[k][0] / VN[k][1]
-    a,b = zip(*Counter.most_common(VN))
-    return a
-
-
-def topological_edges(G, GE):
-    VN = dict.fromkeys(G.edges, (0, 0))
-    for k, v in GE.items():
-        for e in k:
-            VN[e] = (VN[e][0] + v, VN[e][1] + 1)
-    for k in VN:
-        VN[k] = VN[k][0] / VN[k][1]
-    e = Counter.most_common(VN)
-
-    l = {}
-    for x,y in e:
-      a,b = x
-      if a not in l:
-          l[a] = (tuple([b]), y)
-      else:
-          l[a] = (tuple(list(l[a][0]) + [b]), l[a][1] + y)
-
-    s = {}
-    for x,y in l.items():
-        s[(x, y[0])] = y[1]
-
-    a,b = zip(*Counter.most_common(s))
-    return a
-
-def solve(G, H):
-    LG = nx.line_graph(G)
-    LH = nx.line_graph(H)
-    GN, HN = are_isomorphic(G, H, linear=False)
-    GE, HE = are_isomorphic(LG, LH, linear=True)
-
-    gtn = topological_nodes(G, GN)
-    htn = topological_nodes(H, HN)
-    gte = topological_edges(G, GE)
-    hte = topological_edges(H, HE)
-
-    return gtn, htn, gte, hte
-
-
-def assume(gtn, gte, htn, hte):
-    assumptions = defaultdict(list)
-    shift = 0
-    for hn in htn:
-        assumptions[hn] = gtn[shift:len(gtn) - len(htn) + shift + 1]
-        shift += 1
-
-    essumptions = defaultdict(list)
-    shift = 0
-    for he in hte:
-        essumptions[he] = gte[shift:len(gte) - len(hte) + shift + 1]
-        shift += 1
-
-    while True:
-        changed = False
-        for e in essumptions.keys():
-            for j in essumptions[e]:
-                a, b = e
-                x, y = j
-                if x not in assumptions[a] or y not in assumptions[b]:
-                    essumptions[e].remove(j)
-                    changed = True
-
-        for e in essumptions.keys():
-            a, b = zip(*essumptions[e])
-            a = set(a)
-            b = set(b)
-            x, y = e
-            fg = set(assumptions[x]) - a
-            hg = set(assumptions[y]) - b
-
-            if len(fg) > 0:
-                for f in fg:
-                    assumptions[x].remove(f)
-                    changed = True
-
-            if len(hg) > 0:
-                for h in hg:
-                    assumptions[y].remove(h)
-                    changed = True
-
-        if not changed:
-            break
-
-    print(assumptions)
-    print(essumptions)
-
-
-def generate_problem(degree, size, isomorphic):
-    A = nx.random_regular_graph(degree, size)
-    #A = random_k_out_graph(size, 3 , 0.6)
-    node_mapping = dict(zip(A.nodes(), sorted(A.nodes(), key=lambda k: random.random())))
-    B = nx.relabel_nodes(A, node_mapping)
+    if contains:
+     B = nx.complete_graph(largest)
+    else:
+     B = nx.complete_graph(largest + 1)
 
     k = list(B.nodes)
     random.shuffle(k)
@@ -251,27 +165,12 @@ def generate_problem(degree, size, isomorphic):
     H.add_edges_from(B.edges(data=True))
     B = H
 
-    A.remove_nodes_from(list(nx.isolates(A)))
-    B.remove_nodes_from(list(nx.isolates(B)))
-
-    if not isomorphic:
-        B = nx.double_edge_swap(B)
-        #B = directed_edge_swap(B)
-    if isomorphic != nx.is_isomorphic(A, B):
-        return generate_problem(degree, size, isomorphic)
-
-    return A, B
+    return A, B, largest
 
 if __name__ == '__main__':
     N = 30
-    D = 5
+    D = 10
 
-    G, H = generate_problem_sub(D, N, isomorphic=True)
-    gtn, htn, gte, hte = solve(G, H)
-
-    print(gtn)
-    print(htn)
-    print(gte)
-    print(hte)
-
-    #assume(gtn, gte, htn, hte)
+    G, H, s = generate_problem_clique(D, N, contains=True)
+    print(s)
+    print(solve(G, H, s, linear=False))
