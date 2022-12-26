@@ -1,3 +1,16 @@
+import random
+import time
+import warnings
+
+warnings.simplefilter(action='ignore', category=FutureWarning)
+
+import itertools
+import leidenalg
+import igraph as ig
+import networkx as nx
+
+from collections import OrderedDict, Counter
+
 import difflib
 import itertools
 import warnings
@@ -108,6 +121,14 @@ def generate_problem_sub(degree, size, isomorphic):
     B = A.copy()
 
     rm = random.sample(list(B.nodes()), 10)
+
+    k = list(B.nodes)
+    random.shuffle(k)
+    H = nx.Graph()
+    H.add_nodes_from(k)
+    H.add_edges_from(B.edges(data=True))
+    B = H
+
     B.remove_nodes_from(rm)
     A.remove_nodes_from(list(nx.isolates(A)))
     B.remove_nodes_from(list(nx.isolates(B)))
@@ -127,7 +148,8 @@ def topological_nodes(G, GN):
             VN[e] = (VN[e][0] + v, VN[e][1] + 1)
     for k in VN:
         VN[k] = VN[k][0] / VN[k][1]
-    return list(VN.keys())
+    a,b = zip(*Counter.most_common(VN))
+    return a
 
 
 def topological_edges(G, GE):
@@ -137,8 +159,22 @@ def topological_edges(G, GE):
             VN[e] = (VN[e][0] + v, VN[e][1] + 1)
     for k in VN:
         VN[k] = VN[k][0] / VN[k][1]
-    return list(VN.keys())
+    e = Counter.most_common(VN)
 
+    l = {}
+    for x,y in e:
+      a,b = x
+      if a not in l:
+          l[a] = (tuple([b]), y)
+      else:
+          l[a] = (tuple(list(l[a][0]) + [b]), l[a][1] + y)
+
+    s = {}
+    for x,y in l.items():
+        s[(x, y[0])] = y[1]
+
+    a,b = zip(*Counter.most_common(s))
+    return a
 
 def solve(G, H):
     LG = nx.line_graph(G)
@@ -202,6 +238,30 @@ def assume(gtn, gte, htn, hte):
     print(essumptions)
 
 
+def generate_problem(degree, size, isomorphic):
+    A = nx.random_regular_graph(degree, size)
+    #A = random_k_out_graph(size, 3 , 0.6)
+    node_mapping = dict(zip(A.nodes(), sorted(A.nodes(), key=lambda k: random.random())))
+    B = nx.relabel_nodes(A, node_mapping)
+
+    k = list(B.nodes)
+    random.shuffle(k)
+    H = nx.Graph()
+    H.add_nodes_from(k)
+    H.add_edges_from(B.edges(data=True))
+    B = H
+
+    A.remove_nodes_from(list(nx.isolates(A)))
+    B.remove_nodes_from(list(nx.isolates(B)))
+
+    if not isomorphic:
+        B = nx.double_edge_swap(B)
+        #B = directed_edge_swap(B)
+    if isomorphic != nx.is_isomorphic(A, B):
+        return generate_problem(degree, size, isomorphic)
+
+    return A, B
+
 if __name__ == '__main__':
     N = 30
     D = 5
@@ -214,4 +274,4 @@ if __name__ == '__main__':
     print(gte)
     print(hte)
 
-    assume(gtn, gte, htn, hte)
+    #assume(gtn, gte, htn, hte)
