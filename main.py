@@ -2,6 +2,8 @@ import difflib
 import itertools
 import warnings
 
+from sat import gen_unsat, gen_sat, random_cnf
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import random
@@ -87,14 +89,14 @@ def f_wrapper(G, result, seed):
         if g.vcount() < 1 or g.ecount() < 1:
             return 0
         # for other types (like directed), use:
-        val = leidenalg.find_partition(g, partition_type= leidenalg.CPMVertexPartition).modularity
+        val = ig.community._community_leiden(g).modularity
         result[s] = val
         return val
 
     return f
 
 
-def solve(G,H, linear):
+def solve(G, linear):
     def optimization(g, linear, seed):
         result = {}
         G = ig.Graph.from_networkx(g)
@@ -105,52 +107,70 @@ def solve(G,H, linear):
                 [(int(G.vs[i]["_nx_name"]) if not linear else tuple(G.vs[i]["_nx_name"])) for i in key]))] = value
         return ret
 
-    seed = random.getrandbits(16)
+    return optimization(G, linear, None)
 
-    x, y = optimization(G, False, seed), optimization(H, False, None)
 
-    d = {n: [k for k in x.keys() if x[k] == n] for n in set(x.values())}
+def sat_to_clique(formula):
+    g = nx.Graph()
+    map = {}
 
-    print(d)
+    node = 0
 
-    d = {n: [k for k in y.keys() if y[k] == n] for n in set(y.values())}
+    for clause in formula:
+        ins = (node, node + 1, node + 2)
+        map[clause] = ins
+        g.add_nodes_from(ins)
+        node += 3
 
-    print(d)
+    while map:
+        clause, nodes = map.popitem()
+        for literal, node in zip(clause, nodes):
+            for k, v in map.items():
+                for i, j in zip(k, v):
+                    if i * -1 != literal:
+                        g.add_edge(node, j)
+    return g
 
-    q = 0
+def testcase_linear(g):
+    largest = len(g.nodes()) // 3
 
-    for at, bt in itertools.product(x.items(), y.items()):
-        k1, v1 = at
-        k2, v2 = bt
-        if v1 == v2 and len(k1) == len(k2):
-            q += 1
+    a = solve(g, False)
+    rm = 0
+    doex = set(g.nodes()) - set([i[0] for i in a.keys()])
+    a[(0,)] = a[(1,)]
+    sortout = dict([((x,y), (a[(x,)] + a[(y,)])) for x,y in g.edges])
 
-    return q
+    c, _ = zip(*Counter.most_common(sortout))
 
-def generate_problem(degree, size, isomorphic):
-    A = nx.random_regular_graph(degree, size)
-    node_mapping = dict(zip(A.nodes(), sorted(A.nodes(), key=lambda k: random.random())))
-    B = nx.relabel_nodes(A, node_mapping)
+    delu = 0
 
-    k = list(B.nodes)
-    random.shuffle(k)
-    H = nx.Graph()
-    H.add_nodes_from(k)
-    H.add_edges_from(B.edges(data=True))
-    B = H
+    for x,y in reversed(c):
+        if g.has_edge(x, y):
+         g.remove_edge(x, y)
+        elif g.has_edge(y, x):
+         g.remove_edge(y, x)
 
-    A.remove_nodes_from(list(nx.isolates(A)))
-    B.remove_nodes_from(list(nx.isolates(B)))
+        check = {x, y}
+        while check:
+            n = check.pop()
+            if n in g.nodes:
+             if g.degree(n) < largest - 1:
+                for nei in g.neighbors(n):
+                    check.add(nei)
+                delu += 1
+                g.remove_node(n)
 
-    if not isomorphic:
-        B = nx.double_edge_swap(B)
-        # B = directed_edge_swap(B)
-    if isomorphic != nx.is_isomorphic(A, B):
-        return generate_problem(degree, size, isomorphic)
+        rm += 1
+        if ig.Graph.from_networkx(g).clique_number() < largest:
+          break
 
-    return A, B, nx.isomorphism.vf2pp_isomorphism(A, B)
+    return rm, delu, doex
 
 if __name__ == '__main__':
-    G,H, m = generate_problem(5, 30, True)
-    print(m)
-    print(solve(G,H, False))
+     while True:
+      f = gen_sat(6, 6 * 4, random_cnf(6))
+      #f = gen_unsat(4, 4 * 4)
+      g = sat_to_clique(f)
+      print(testcase_linear(g.copy()))
+
+      # syort nodes by edges value
