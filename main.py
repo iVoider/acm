@@ -13,6 +13,7 @@ import networkx as nx
 from collections import OrderedDict, deque, defaultdict, Counter
 import time
 
+
 def queyranne(F, V):
     def Fnew(a):
         r = []
@@ -25,11 +26,11 @@ def queyranne(F, V):
     s = []
     A = []
     inew = OrderedDict()
-    for x in range(1, n + 1):
+    for x in range(0, n + 1):
         inew[x] = x
     minimum = float("inf")
     position_of_min = 0
-    for h in range(n - 1):
+    for h in range(n):
         # Find a pendant pair
         [t, u] = pendentpair(Fnew, inew)
         # This gives a candidate solution
@@ -52,7 +53,7 @@ def pendentpair(F, V):
     n = len(V)
     Wi = []
     used = [0] * n
-    for i in range(n):
+    for i in range(n + 1):
         vold = vnew
         Wi += [vold]
         keys = [1e99] * n
@@ -131,46 +132,37 @@ def sat_to_clique(formula):
                         g.add_edge(node, j)
     return g
 
-def testcase_linear(g):
-    largest = len(g.nodes()) // 3
 
-    a = solve(g, False)
-    rm = 0
-    doex = set(g.nodes()) - set([i[0] for i in a.keys()])
-    a[(0,)] = a[(1,)]
-    sortout = dict([((x,y), (a[(x,)] + a[(y,)])) for x,y in g.edges])
+def iter(g, largest):
+    options = {}
 
-    c, _ = zip(*Counter.most_common(sortout))
+    for e in g.edges():
+        h = g.copy()
+        h.remove_edge(e[0],e[1])
+        a = solve(h, False)
+        options[e] = sum(a.values())
 
-    delu = 0
+    n = min(options, key=options.get)
+    g.remove_edge(n[0], n[1])
 
-    for x,y in reversed(c):
-        if g.has_edge(x, y):
-         g.remove_edge(x, y)
-        elif g.has_edge(y, x):
-         g.remove_edge(y, x)
-
-        check = {x, y}
-        while check:
-            n = check.pop()
-            if n in g.nodes:
-             if g.degree(n) < largest - 1:
+    check = {n[0], n[1]}
+    while check:
+        n = check.pop()
+        if n in g.nodes:
+            if g.degree(n) < largest - 1:
                 for nei in g.neighbors(n):
                     check.add(nei)
-                delu += 1
                 g.remove_node(n)
 
-        rm += 1
-        if ig.Graph.from_networkx(g).clique_number() < largest:
-          break
+    return g
 
-    return rm, delu, doex
 
 if __name__ == '__main__':
-     while True:
-      f = gen_sat(6, 6 * 4, random_cnf(6))
-      #f = gen_unsat(4, 4 * 4)
-      g = sat_to_clique(f)
-      print(testcase_linear(g.copy()))
-
-      # syort nodes by edges value
+        f = gen_sat(4, 4 * 4, random_cnf(4))
+        # f = gen_unsat(4, 4 * 4)
+        g = sat_to_clique(f)
+        largest = len(g.nodes()) // 3
+        print(len(g.edges), len(g.nodes()))
+        while ig.Graph.from_networkx(g).clique_number() >= largest:
+         g = iter(g.copy(), largest)
+        print(len(g.edges), len(g.nodes()))
