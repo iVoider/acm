@@ -138,31 +138,36 @@ def iter(g, largest):
 
     for e in g.edges():
         h = g.copy()
-        h.remove_edge(e[0],e[1])
+        h.remove_edge(e[0], e[1])
         a = solve(h, False)
         options[e] = sum(a.values())
 
-    n = min(options, key=options.get)
-    g.remove_edge(n[0], n[1])
+    e = min(options, key=options.get)
+    g.remove_edge(e[0], e[1])
 
-    check = {n[0], n[1]}
+    check = {e[0], e[1]}
+
     while check:
-        n = check.pop()
-        if n in g.nodes:
-            if g.degree(n) < largest - 1:
-                for nei in g.neighbors(n):
+        c = check.pop()
+        if c in g.nodes:
+            if g.degree(c) < largest - 1:
+                for nei in g.neighbors(c):
                     check.add(nei)
-                g.remove_node(n)
+                g.remove_node(c)
 
     return g
 
 
 if __name__ == '__main__':
-        f = gen_sat(4, 4 * 4, random_cnf(4))
+        f = gen_sat(4, 4 * 3, random_cnf(4))
         # f = gen_unsat(4, 4 * 4)
         g = sat_to_clique(f)
         largest = len(g.nodes()) // 3
-        print(len(g.edges), len(g.nodes()))
-        while ig.Graph.from_networkx(g).clique_number() >= largest:
-         g = iter(g.copy(), largest)
-        print(len(g.edges), len(g.nodes()))
+        print(len(g.edges), len(g.nodes()), largest)
+        while True:
+         k = iter(g.copy(), largest)
+         if ig.Graph.from_networkx(k).clique_number() < largest:
+             break
+         else:
+           g = k
+        print(len(g.edges), len(g.nodes()), ig.Graph.from_networkx(g).clique_number())
