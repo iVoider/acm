@@ -137,50 +137,30 @@ def iter(g):
     a = solve(g, False)
     di = {}
     for e in g.edges:
-        di[e] = a[(e[0],)] + a[(e[1],)]
-    return Counter.most_common(di)
+        di[e] = (a[(e[0],)] + a[(e[1],)]) / 2
+    return Counter.most_common(di), a
 
 
 if __name__ == '__main__':
 
-    f = gen_sat(4, 4 * 3, random_cnf(4))
+  yes = 0
+  no = 0
+
+  for l in range(0,1000):
+    f = gen_sat(6, 6 * 4, random_cnf(6))
     # f = gen_unsat(4, 4 * 4)
     g = sat_to_clique(f)
-    k = [(frozenset(x), y) for x, y in iter(g)]
+    k, a = iter(g)
 
-    d = dict(k)
+    if a[(k[-1][0][0],)] > a[(k[-1][0][1],)]:
+     g.remove_node(k[-1][0][1])
+    else:
+     g.remove_node(k[-1][0][0])
 
-    complete_nodes = len(g.nodes())
+    num = ig.Graph.from_networkx(g).clique_number()
+    if num == 24:
+     yes += 1
+    else:
+     no += 1
 
-    options = {k[0][0]}
-    cur = set()
-    while options:
-        next = options.pop()
-        co = tuple(next)
-        cur.add(co[0])
-        cur.add(co[1])
-        pos = frozenset(g.neighbors(co[0]))
-
-        for c in cur:
-            pos = pos & frozenset(g.neighbors(c))
-
-        if len(pos) > 0:
-            mx = -1
-            mxv = -10e10
-            for p in pos:
-                result = 0
-                for pc in cur:
-                    result += d[frozenset({p, pc})]
-                if result > mxv:
-                    mx = p
-                    mxv = result
-
-            for c in cur:
-                options.add(frozenset({mx, c}))
-
-
-    mxc = 0
-    for cl in ig.Graph.from_networkx(g).largest_cliques():
-        mxc = max(mxc, len(cur & set(cl)))
-
-    print(mxc)
+  print(yes, no)
