@@ -133,41 +133,54 @@ def sat_to_clique(formula):
     return g
 
 
-def iter(g, largest):
-    options = {}
-
-    for e in g.edges():
-        h = g.copy()
-        h.remove_edge(e[0], e[1])
-        a = solve(h, False)
-        options[e] = sum(a.values())
-
-    e = min(options, key=options.get)
-    g.remove_edge(e[0], e[1])
-
-    check = {e[0], e[1]}
-
-    while check:
-        c = check.pop()
-        if c in g.nodes:
-            if g.degree(c) < largest - 1:
-                for nei in g.neighbors(c):
-                    check.add(nei)
-                g.remove_node(c)
-
-    return g
+def iter(g):
+    a = solve(g, False)
+    di = {}
+    for e in g.edges:
+        di[e] = a[(e[0],)] + a[(e[1],)]
+    return Counter.most_common(di)
 
 
 if __name__ == '__main__':
-        f = gen_sat(4, 4 * 3, random_cnf(4))
-        # f = gen_unsat(4, 4 * 4)
-        g = sat_to_clique(f)
-        largest = len(g.nodes()) // 3
-        print(len(g.edges), len(g.nodes()), largest)
-        while True:
-         k = iter(g.copy(), largest)
-         if ig.Graph.from_networkx(k).clique_number() < largest:
-             break
-         else:
-           g = k
-        print(len(g.edges), len(g.nodes()), ig.Graph.from_networkx(g).clique_number())
+
+    f = gen_sat(4, 4 * 3, random_cnf(4))
+    # f = gen_unsat(4, 4 * 4)
+    g = sat_to_clique(f)
+    k = [(frozenset(x), y) for x, y in iter(g)]
+
+    d = dict(k)
+
+    complete_nodes = len(g.nodes())
+
+    options = {k[0][0]}
+    cur = set()
+    while options:
+        next = options.pop()
+        co = tuple(next)
+        cur.add(co[0])
+        cur.add(co[1])
+        pos = frozenset(g.neighbors(co[0]))
+
+        for c in cur:
+            pos = pos & frozenset(g.neighbors(c))
+
+        if len(pos) > 0:
+            mx = -1
+            mxv = -10e10
+            for p in pos:
+                result = 0
+                for pc in cur:
+                    result += d[frozenset({p, pc})]
+                if result > mxv:
+                    mx = p
+                    mxv = result
+
+            for c in cur:
+                options.add(frozenset({mx, c}))
+
+
+    mxc = 0
+    for cl in ig.Graph.from_networkx(g).largest_cliques():
+        mxc = max(mxc, len(cur & set(cl)))
+
+    print(mxc)
