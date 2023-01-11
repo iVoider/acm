@@ -110,53 +110,41 @@ def solve(g, linear, cpm = True):
     ret = {}
     for key, value in q:
         ret[tuple(sorted(
-            [(int(G.vs[i]["_nx_name"]) if not linear else tuple(G.vs[i]["_nx_name"])) for i in key]))] = value
-    di = {}
-    for e in g.edges:
-        di[e] = (ret[(e[0],)] + ret[(e[1],)])
-    return Counter.most_common(di)
+            [(int(G.vs[i]["_nx_name"]) if not linear else tuple(G.vs[i]["_nx_name"])) for i in key]))[0]] = value
+    return list(ret.items())
 
 
 def here(g, ksize, cpm = True):
-    k = [(frozenset(x), y) for x, y in solve(g, False, cpm)]
+    k = solve(g, False, cpm)
 
     d = dict(k)
 
-    # v = {}
-    #
-    # for key, value in sorted(d.items()):
-    #     v.setdefault(value, []).append(key)
-    #
-    # print(v)
-
     z = 0
-    for origin in k[:1000]:
+    for origin in k:
         z += 1
-        options = {origin[0]}
+        if origin[0] == k[0][0]:
+         options = {origin[0], k[1][0]}
+        else:
+         options = {origin[0], k[0][0]}
         cur = set()
+        pos = set(g.neighbors(origin[0]))
         while options:
-            next = options.pop()
-            co = tuple(next)
-            cur.add(co[0])
-            cur.add(co[1])
-            pos = frozenset(g.neighbors(co[0]))
+            one = options.pop()
+            cur.add(one)
 
-            for c in cur:
-                pos = pos & frozenset(g.neighbors(c))
+            pos = pos & set(g.neighbors(one))
 
             if len(pos) > 0:
                 mx = -1
                 mxv = -10e10
                 for p in pos:
-                    result = 0
-                    for pc in cur:
-                        result += d[frozenset({p, pc})]
+                    result = d[p]
                     if result > mxv:
                         mx = p
                         mxv = result
 
-                for c in cur:
-                    options.add(frozenset({mx, c}))
+                options.add(mx)
+
         if len(cur) >= ksize and nx.density(g.subgraph(cur)) == 1:
             return True
 
@@ -166,14 +154,16 @@ def here(g, ksize, cpm = True):
 if __name__ == '__main__':
  r = 0
  while True:
-    f = gen_sat(15, 15 * 3, random_cnf(15))
+    f = gen_sat(10, 10 * 3, random_cnf(10))
     #f = gen_unsat(10, 10 * 5)
     g = sat_to_clique(f)
     t = 0
     while True:
-      if here(g.copy(), 15 * 3, True) or here(g.copy(), 15 * 3, False):
+      if here(g.copy(), 10 * 3, True) or here(g.copy(), 10 * 3, False):
           break
       else:
         t += 1
     r += 1
     print(r, t)
+
+
