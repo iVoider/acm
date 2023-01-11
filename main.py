@@ -2,7 +2,7 @@ import difflib
 import itertools
 import warnings
 
-from sat import gen_unsat, gen_sat, random_cnf
+from sat import gen_unsat, gen_sat, random_cnf, sat_to_clique
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -77,7 +77,7 @@ def pendentpair(F, V):
     return [vold, vnew]
 
 
-def f_wrapper(G, result, seed):
+def f_wrapper(G, result, cpm = True):
     nodes_set = set(G.vs.indices)
 
     def f(s):
@@ -90,77 +90,90 @@ def f_wrapper(G, result, seed):
         if g.vcount() < 1 or g.ecount() < 1:
             return 0
         # for other types (like directed), use:
-        val = ig.community._community_leiden(g).modularity
+
+        if cpm:
+         #val = leidenalg.find_partition(g, partition_type=leidenalg.CPMVertexPartition, seed=random.getrandbits(16)).modularity
+         val = ig.community._community_leiden(g, objective_function="CPM").modularity
+        else:
+         #val = leidenalg.find_partition(g, partition_type=leidenalg.ModularityVertexPartition, seed=random.getrandbits(16)).modularity
+         val = ig.community._community_leiden(g, objective_function="modularity").modularity
         result[s] = val
         return val
 
     return f
 
 
-def solve(G, linear):
-    def optimization(g, linear, seed):
-        result = {}
-        G = ig.Graph.from_networkx(g)
-        q = queyranne(f_wrapper(G, result, seed), list(range(0, g.number_of_nodes())))
-        ret = {}
-        for key, value in q:
-            ret[tuple(sorted(
-                [(int(G.vs[i]["_nx_name"]) if not linear else tuple(G.vs[i]["_nx_name"])) for i in key]))] = value
-        return ret
-
-    return optimization(G, linear, None)
-
-
-def sat_to_clique(formula):
-    g = nx.Graph()
-    map = {}
-
-    node = 0
-
-    for clause in formula:
-        ins = (node, node + 1, node + 2)
-        map[clause] = ins
-        g.add_nodes_from(ins)
-        node += 3
-
-    while map:
-        clause, nodes = map.popitem()
-        for literal, node in zip(clause, nodes):
-            for k, v in map.items():
-                for i, j in zip(k, v):
-                    if i * -1 != literal:
-                        g.add_edge(node, j)
-    return g
-
-
-def iter(g):
-    a = solve(g, False)
+def solve(g, linear, cpm = True):
+    result = {}
+    G = ig.Graph.from_networkx(g)
+    q = queyranne(f_wrapper(G, result, cpm), list(range(0, g.number_of_nodes())))
+    ret = {}
+    for key, value in q:
+        ret[tuple(sorted(
+            [(int(G.vs[i]["_nx_name"]) if not linear else tuple(G.vs[i]["_nx_name"])) for i in key]))] = value
     di = {}
     for e in g.edges:
-        di[e] = (a[(e[0],)] + a[(e[1],)]) / 2
-    return Counter.most_common(di), a
+        di[e] = (ret[(e[0],)] + ret[(e[1],)])
+    return Counter.most_common(di)
+
+
+def here(g, ksize, cpm = True):
+    k = [(frozenset(x), y) for x, y in solve(g, False, cpm)]
+
+    d = dict(k)
+
+    # v = {}
+    #
+    # for key, value in sorted(d.items()):
+    #     v.setdefault(value, []).append(key)
+    #
+    # print(v)
+
+    z = 0
+    for origin in k[:1000]:
+        z += 1
+        options = {origin[0]}
+        cur = set()
+        while options:
+            next = options.pop()
+            co = tuple(next)
+            cur.add(co[0])
+            cur.add(co[1])
+            pos = frozenset(g.neighbors(co[0]))
+
+            for c in cur:
+                pos = pos & frozenset(g.neighbors(c))
+
+            if len(pos) > 0:
+                mx = -1
+                mxv = -10e10
+                for p in pos:
+                    result = 0
+                    for pc in cur:
+                        result += d[frozenset({p, pc})]
+                    if result > mxv:
+                        mx = p
+                        mxv = result
+
+                for c in cur:
+                    options.add(frozenset({mx, c}))
+        if len(cur) >= ksize and nx.density(g.subgraph(cur)) == 1:
+            return True
+
+    return False
 
 
 if __name__ == '__main__':
-
-  yes = 0
-  no = 0
-
-  for l in range(0,1000):
-    f = gen_sat(6, 6 * 4, random_cnf(6))
-    # f = gen_unsat(4, 4 * 4)
+ r = 0
+ while True:
+    f = gen_sat(15, 15 * 3, random_cnf(15))
+    #f = gen_unsat(10, 10 * 5)
     g = sat_to_clique(f)
-    k, a = iter(g)
-
-    if a[(k[-1][0][0],)] > a[(k[-1][0][1],)]:
-     g.remove_node(k[-1][0][1])
-    else:
-     g.remove_node(k[-1][0][0])
-
-    num = ig.Graph.from_networkx(g).clique_number()
-    if num == 24:
-     yes += 1
-    else:
-     no += 1
-
-  print(yes, no)
+    t = 0
+    while True:
+      if here(g.copy(), 15 * 3, True) or here(g.copy(), 15 * 3, False):
+          break
+      else:
+        t += 1
+    r += 1
+    print(r, t)
