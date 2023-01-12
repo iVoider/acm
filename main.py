@@ -1,5 +1,6 @@
 import difflib
 import itertools
+import operator
 import warnings
 
 from sat import gen_unsat, gen_sat, random_cnf, sat_to_clique
@@ -28,7 +29,7 @@ def queyranne(F, V):
     inew = OrderedDict()
     for x in range(0, n + 1):
         inew[x] = x
-    minimum = float("inf")
+    minimum = (float("inf"),float("inf"))
     position_of_min = 0
     for h in range(n):
         # Find a pendant pair
@@ -57,14 +58,14 @@ def pendentpair(F, V):
         vold = vnew
         Wi += [vold]
         keys = [1e99] * n
-        minimum = float("inf")
+        minimum = (float("inf"), float("inf"))
         counter = -1
         for j in V:
             counter += 1
             if used[counter]:
                 continue
             Wi += [V[j]]
-            keys[counter] = F(Wi) - F({V[j]})
+            keys[counter] = tuple(map(operator.add, F(Wi), F({V[j]})))
             del Wi[-1]
             if keys[counter] < minimum:
                 minimum = keys[counter]
@@ -90,13 +91,7 @@ def f_wrapper(G, result, cpm = True):
         if g.vcount() < 1 or g.ecount() < 1:
             return 0
         # for other types (like directed), use:
-
-        if cpm:
-         #val = leidenalg.find_partition(g, partition_type=leidenalg.CPMVertexPartition, seed=random.getrandbits(16)).modularity
-         val = ig.community._community_leiden(g, objective_function="CPM").modularity
-        else:
-         #val = leidenalg.find_partition(g, partition_type=leidenalg.ModularityVertexPartition, seed=random.getrandbits(16)).modularity
-         val = ig.community._community_leiden(g, objective_function="modularity").modularity
+        val = (ig.community._community_leiden(g, objective_function="modularity").modularity, ig.community._community_leiden(g, objective_function="CPM").modularity)
         result[s] = val
         return val
 
@@ -111,12 +106,11 @@ def solve(g, linear, cpm = True):
     for key, value in q:
         ret[tuple(sorted(
             [(int(G.vs[i]["_nx_name"]) if not linear else tuple(G.vs[i]["_nx_name"])) for i in key]))[0]] = value
-    return list(ret.items())
+    return Counter.most_common(ret)
 
 
 def here(g, ksize, cpm = True):
     k = solve(g, False, cpm)
-
     d = dict(k)
 
     z = 0
@@ -136,7 +130,7 @@ def here(g, ksize, cpm = True):
 
             if len(pos) > 0:
                 mx = -1
-                mxv = -10e10
+                mxv = (-10e10, -10e10)
                 for p in pos:
                     result = d[p]
                     if result > mxv:
@@ -152,18 +146,18 @@ def here(g, ksize, cpm = True):
 
 
 if __name__ == '__main__':
- r = 0
- while True:
-    f = gen_sat(10, 10 * 3, random_cnf(10))
+    r = 0
+    f = gen_sat(15, 15 * 5, random_cnf(15))
     #f = gen_unsat(10, 10 * 5)
     g = sat_to_clique(f)
     t = 0
     while True:
-      if here(g.copy(), 10 * 3, True) or here(g.copy(), 10 * 3, False):
+      if here(g.copy(), 15 * 5, True):
           break
       else:
+        print(t)
         t += 1
     r += 1
-    print(r, t)
+
 
 
