@@ -91,7 +91,10 @@ def f_wrapper(G, result, cpm = True):
         if g.vcount() < 1 or g.ecount() < 1:
             return 0
         # for other types (like directed), use:
-        val = (ig.community._community_leiden(g, objective_function="modularity").modularity, ig.community._community_leiden(g, objective_function="CPM").modularity)
+        if cpm:
+         val = (ig.community._community_leiden(g, objective_function="CPM").modularity, 0.0)
+        else:
+         val = (ig.community._community_leiden(g, objective_function="modularity").modularity, 0.0)
         result[s] = val
         return val
 
@@ -106,58 +109,35 @@ def solve(g, linear, cpm = True):
     for key, value in q:
         ret[tuple(sorted(
             [(int(G.vs[i]["_nx_name"]) if not linear else tuple(G.vs[i]["_nx_name"])) for i in key]))[0]] = value
-    return Counter.most_common(ret)
+    return ret
 
 
 def here(g, ksize, cpm = True):
-    k = solve(g, False, cpm)
-    d = dict(k)
+    x = solve(g, False, cpm)
+    y = solve(g, False, not cpm)
 
-    z = 0
-    for origin in k:
-        z += 1
-        if origin[0] == k[0][0]:
-         options = {origin[0], k[1][0]}
-        else:
-         options = {origin[0], k[0][0]}
-        cur = set()
-        pos = set(g.neighbors(origin[0]))
-        while options:
-            one = options.pop()
-            cur.add(one)
+    a = min(x, key=x.get)
+    b = max(y, key=y.get)
 
-            pos = pos & set(g.neighbors(one))
+    h = g.copy()
+    h.remove_node(a)
 
-            if len(pos) > 0:
-                mx = -1
-                mxv = (-10e10, -10e10)
-                for p in pos:
-                    result = d[p]
-                    if result > mxv:
-                        mx = p
-                        mxv = result
+    v = g.copy()
+    v.remove_node(b)
 
-                options.add(mx)
-
-        if len(cur) >= ksize and nx.density(g.subgraph(cur)) == 1:
-            return True
-
-    return False
-
+    return ig.Graph.from_networkx(h).clique_number() == ksize or ig.Graph.from_networkx(v).clique_number() == ksize
 
 if __name__ == '__main__':
-    r = 0
-    f = gen_sat(15, 15 * 5, random_cnf(15))
+
     #f = gen_unsat(10, 10 * 5)
-    g = sat_to_clique(f)
-    t = 0
-    while True:
-      if here(g.copy(), 15 * 5, True):
-          break
-      else:
-        print(t)
-        t += 1
-    r += 1
+
+    y = 0
+    for i in range(0, 10000):
+     f = gen_sat(5, 5 * 4, random_cnf(4))
+     g = sat_to_clique(f)
+     if here(g, 5 * 4):
+         y += 1
+    print(y)
 
 
 
