@@ -15,26 +15,26 @@ from collections import OrderedDict, deque, defaultdict, Counter
 import time
 
 
-def queyranne(F, V):
+def queyranne(F,V):
     def Fnew(a):
-        r = []
+        r=[]
         for x in a:
             r += S[x - 1]
         return F(r)
-
     n = len(V)
     S = [[x] for x in V]
     s = []
     A = []
     inew = OrderedDict()
-    for x in range(0, n + 1):
+    for x in range(1,n+1):
         inew[x] = x
-    minimum = (float("inf"),float("inf"))
-    position_of_min = 0
+    minimum=float("inf")
+    position_of_min=0
+
     for h in range(n):
-        # Find a pendant pair
-        [t, u] = pendentpair(Fnew, inew)
-        # This gives a candidate solution
+        #Find a pendant pair
+        [t,u] = pendentpair(Fnew,inew)
+        #This gives a candidate solution
         A.append(S[u - 1].copy())
         s.append(Fnew({u}))
         if s[-1] < minimum:
@@ -47,8 +47,12 @@ def queyranne(F, V):
     vals = dict(zip([tuple(a) for a in A], s))
     return Counter.most_common(vals)
 
+#Implements the pendant pair finding subroutine of Queyranne's algorithm
+#(Queyranne '95)
+#F is the submodular function
+#inds is an array of indices; (typically, 1:n)
 
-def pendentpair(F, V):
+def pendentpair(F,V):
     vstart = V.popitem(last=False)[0]
     vnew = vstart
     n = len(V)
@@ -57,15 +61,16 @@ def pendentpair(F, V):
     for i in range(n + 1):
         vold = vnew
         Wi += [vold]
+        #Now update the keys
         keys = [1e99] * n
-        minimum = (float("inf"), float("inf"))
+        minimum = float("inf")
         counter = -1
         for j in V:
             counter += 1
             if used[counter]:
                 continue
             Wi += [V[j]]
-            keys[counter] = tuple(map(operator.add, F(Wi), F({V[j]})))
+            keys[counter] = F(Wi) - F({V[j]})
             del Wi[-1]
             if keys[counter] < minimum:
                 minimum = keys[counter]
@@ -74,13 +79,12 @@ def pendentpair(F, V):
             vnew = argmin_key
             used[argmin_position] = 1
     V[vstart] = vstart
-    V.move_to_end(vstart, last=False)
-    return [vold, vnew]
+    V.move_to_end(vstart,last=False)
+    return [vold,vnew]
 
 
 def f_wrapper(G, result, cpm = True):
     nodes_set = set(G.vs.indices)
-
     def f(s):
         s = tuple(sorted(s))
         if s in result:
@@ -90,11 +94,11 @@ def f_wrapper(G, result, cpm = True):
 
         if g.vcount() < 1 or g.ecount() < 1:
             return 0
-        # for other types (like directed), use:
+
         if cpm:
-         val = (ig.community._community_leiden(g, objective_function="CPM").modularity, 0.0)
+         val = ig.community._community_leiden(g, objective_function="CPM", n_iterations=1).modularity
         else:
-         val = (ig.community._community_leiden(g, objective_function="modularity").modularity, 0.0)
+         val = ig.community._community_leiden(g, objective_function="modularity", n_iterations=1).modularity
         result[s] = val
         return val
 
@@ -109,35 +113,63 @@ def solve(g, linear, cpm = True):
     for key, value in q:
         ret[tuple(sorted(
             [(int(G.vs[i]["_nx_name"]) if not linear else tuple(G.vs[i]["_nx_name"])) for i in key]))[0]] = value
-    return ret
+    return Counter.most_common(ret)
 
 
 def here(g, ksize, cpm = True):
-    x = solve(g, False, cpm)
-    y = solve(g, False, not cpm)
+    k = solve(g, False, cpm)
 
-    a = min(x, key=x.get)
-    b = max(y, key=y.get)
+    d = dict(k)
 
-    h = g.copy()
-    h.remove_node(a)
+    z = 0
+    for origin in k:
+        z += 1
+        if origin[0] == k[0][0]:
+         options = {origin[0], k[1][0]}
+        else:
+         options = {origin[0], k[0][0]}
+        cur = set()
+        pos = set(g.neighbors(origin[0]))
+        while options:
+            one = options.pop()
+            cur.add(one)
 
-    v = g.copy()
-    v.remove_node(b)
+            pos = pos & set(g.neighbors(one))
 
-    return ig.Graph.from_networkx(h).clique_number() == ksize or ig.Graph.from_networkx(v).clique_number() == ksize
+            if len(pos) > 0:
+                mx = -1
+                mxv = -10e10
+                for p in pos:
+                    result = d[p]
+                    if result > mxv:
+                        mx = p
+                        mxv = result
+
+                options.add(mx)
+
+        if len(cur) >= ksize and nx.density(g.subgraph(cur)) == 1:
+            return True
+
+    return False
 
 if __name__ == '__main__':
 
     #f = gen_unsat(10, 10 * 5)
-
-    y = 0
-    for i in range(0, 10000):
-     f = gen_sat(5, 5 * 4, random_cnf(4))
+    xy = 0
+    yx = 0
+    for i in range(0, 100):
+     f = gen_sat(20, 20 * 3, random_cnf(20))
      g = sat_to_clique(f)
-     if here(g, 5 * 4):
-         y += 1
-    print(y)
+     t = 0
+     while True:
+         if here(g.copy(), 20 * 3, True):
+             xy += 1
+             break
+         elif here(g.copy(), 20 * 3, False):
+             yx += 1
+             break
+         t += 1
 
+     print(i, t)
 
-
+    print(xy, yx)
