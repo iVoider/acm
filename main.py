@@ -140,6 +140,7 @@ def here(g, ksize, cpm = True):
         pos = set(g.neighbors(tuple(origin[0])[0])) & set(g.neighbors(tuple(origin[0])[1]))
 
         while options:
+
             next = options.pop()
             co = tuple(next)
             if j[co[0]] > j[co[1]]:
@@ -164,15 +165,15 @@ def here(g, ksize, cpm = True):
 
                 pos = pos & set(g.neighbors(mx))
 
-        if len(cur) == ksize:
-            return True
+            if len(cur) == ksize:
+               return True
 
     return False
 
 
 if __name__ == '__main__':
  r = 0
- N = 5
+ N = 10
  M = 4
  for p in range(0,10000):
     f = gen_sat(N, N * M, random_cnf(N))
@@ -185,5 +186,6 @@ if __name__ == '__main__':
       else:
         t += 1
     r += 1
-    if t > 0:
-     print(r, t, f)
+    print(r, t)
+
+
