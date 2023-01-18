@@ -3,7 +3,10 @@ import itertools
 import operator
 import warnings
 
-from sat import gen_unsat, gen_sat, random_cnf, sat_to_clique
+import numpy as np
+import sympy
+
+from sat import gen_unsat, gen_sat, random_cnf, sat_to_clique, random_clause
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -15,26 +18,27 @@ from collections import OrderedDict, deque, defaultdict, Counter
 import time
 
 
-def queyranne(F,V):
+def queyranne(F, V):
     def Fnew(a):
-        r=[]
+        r = []
         for x in a:
             r += S[x - 1]
         return F(r)
+
     n = len(V)
     S = [[x] for x in V]
     s = []
     A = []
     inew = OrderedDict()
-    for x in range(1,n+1):
+    for x in range(1, n + 1):
         inew[x] = x
-    minimum=float("inf")
-    position_of_min=0
+    minimum = float("inf")
+    position_of_min = 0
 
     for h in range(n):
-        #Find a pendant pair
-        [t,u] = pendentpair(Fnew,inew)
-        #This gives a candidate solution
+        # Find a pendant pair
+        [t, u] = pendentpair(Fnew, inew)
+        # This gives a candidate solution
         A.append(S[u - 1].copy())
         s.append(Fnew({u}))
         if s[-1] < minimum:
@@ -47,12 +51,13 @@ def queyranne(F,V):
     vals = dict(zip([tuple(a) for a in A], s))
     return Counter.most_common(vals)
 
-#Implements the pendant pair finding subroutine of Queyranne's algorithm
-#(Queyranne '95)
-#F is the submodular function
-#inds is an array of indices; (typically, 1:n)
 
-def pendentpair(F,V):
+# Implements the pendant pair finding subroutine of Queyranne's algorithm
+# (Queyranne '95)
+# F is the submodular function
+# inds is an array of indices; (typically, 1:n)
+
+def pendentpair(F, V):
     vstart = V.popitem(last=False)[0]
     vnew = vstart
     n = len(V)
@@ -61,7 +66,7 @@ def pendentpair(F,V):
     for i in range(n + 1):
         vold = vnew
         Wi += [vold]
-        #Now update the keys
+        # Now update the keys
         keys = [1e99] * n
         minimum = float("inf")
         counter = -1
@@ -79,12 +84,13 @@ def pendentpair(F,V):
             vnew = argmin_key
             used[argmin_position] = 1
     V[vstart] = vstart
-    V.move_to_end(vstart,last=False)
-    return [vold,vnew]
+    V.move_to_end(vstart, last=False)
+    return [vold, vnew]
 
 
-def f_wrapper(G, result, cpm = True):
+def f_wrapper(G, result, cpm):
     nodes_set = set(G.vs.indices)
+
     def f(s):
         s = tuple(sorted(s))
         if s in result:
@@ -94,7 +100,6 @@ def f_wrapper(G, result, cpm = True):
 
         if g.vcount() < 1 or g.ecount() < 1:
             return 0
-
         if cpm:
          val = ig.community._community_leiden(g, objective_function="CPM", n_iterations=1).modularity
         else:
@@ -108,68 +113,77 @@ def f_wrapper(G, result, cpm = True):
 def solve(g, linear, cpm = True):
     result = {}
     G = ig.Graph.from_networkx(g)
-    q = queyranne(f_wrapper(G, result, cpm), list(range(0, g.number_of_nodes())))
+    q = queyranne(f_wrapper(G, result,  cpm), list(range(0, g.number_of_nodes())))
     ret = {}
     for key, value in q:
         ret[tuple(sorted(
             [(int(G.vs[i]["_nx_name"]) if not linear else tuple(G.vs[i]["_nx_name"])) for i in key]))[0]] = value
-    return Counter.most_common(ret)
+
+    di = {}
+
+    for e in g.edges:
+        di[e] = ret[e[0]] + ret[e[1]]
+
+    return Counter.most_common(di), ret
 
 
 def here(g, ksize, cpm = True):
-    k = solve(g, False, cpm)
+    i,j = solve(g, False, cpm)
+    k = [(frozenset(x), y) for x, y in i]
 
     d = dict(k)
 
-    z = 0
     for origin in k:
-        z += 1
-        if origin[0] == k[0][0]:
-         options = {origin[0], k[1][0]}
-        else:
-         options = {origin[0], k[0][0]}
-        cur = set()
-        pos = set(g.neighbors(origin[0]))
-        while options:
-            one = options.pop()
-            cur.add(one)
+        options = {origin[0]}
+        cur = dict()
 
-            pos = pos & set(g.neighbors(one))
+        pos = set(g.neighbors(tuple(origin[0])[0])) & set(g.neighbors(tuple(origin[0])[1]))
+
+        while options:
+            next = options.pop()
+            co = tuple(next)
+            if j[co[0]] > j[co[1]]:
+             cur[co[0]] = None
+             cur[co[1]] = None
+            else:
+             cur[co[1]] = None
+             cur[co[0]] = None
 
             if len(pos) > 0:
                 mx = -1
                 mxv = -10e10
                 for p in pos:
-                    result = d[p]
+                    result = 0
+                    for pc in cur:
+                        result += d[frozenset({p, pc})]
                     if result > mxv:
                         mx = p
                         mxv = result
+                for c in cur:
+                    options.add(frozenset({mx, c}))
 
-                options.add(mx)
+                pos = pos & set(g.neighbors(mx))
 
-        if len(cur) >= ksize and nx.density(g.subgraph(cur)) == 1:
+        if len(cur) == ksize:
             return True
 
     return False
 
+
 if __name__ == '__main__':
-
+ r = 0
+ N = 5
+ M = 4
+ for p in range(0,10000):
+    f = gen_sat(N, N * M, random_cnf(N))
     #f = gen_unsat(10, 10 * 5)
-    xy = 0
-    yx = 0
-    for i in range(0, 100):
-     f = gen_sat(20, 20 * 3, random_cnf(20))
-     g = sat_to_clique(f)
-     t = 0
-     while True:
-         if here(g.copy(), 20 * 3, True):
-             xy += 1
-             break
-         elif here(g.copy(), 20 * 3, False):
-             yx += 1
-             break
-         t += 1
-
-     print(i, t)
-
-    print(xy, yx)
+    g = sat_to_clique(f)
+    t = 0
+    while True:
+      if here(g.copy(), N * M, True) or here(g.copy(), N * M, False):
+          break
+      else:
+        t += 1
+    r += 1
+    if t > 0:
+     print(r, t, f)
