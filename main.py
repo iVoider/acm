@@ -153,7 +153,7 @@ def here(g, ksize, cpm = True):
             if len(pos) > 0:
                 mx = -1
                 mxv = -10e10
-                for p in pos:
+                for p in pos - set(cur.keys()):
                     result = 0
                     for pc in cur:
                         result += d[frozenset({p, pc})]
@@ -173,19 +173,20 @@ def here(g, ksize, cpm = True):
 
 if __name__ == '__main__':
  r = 0
- N = 10
- M = 4
+ N = 20
+ M = int((4.258 * N) + (58.26 * N) ** (-2/3))
+ M = 60
  for p in range(0,10000):
-    f = gen_sat(N, N * M, random_cnf(N))
+    f = gen_sat(N, M, random_cnf(N))
     #f = gen_unsat(10, 10 * 5)
     g = sat_to_clique(f)
     t = 0
     while True:
-      if here(g.copy(), N * M, True) or here(g.copy(), N * M, False):
+      if here(g.copy(), M, True) or here(g.copy(), M, False):
           break
       else:
+        print(t)
         t += 1
     r += 1
     print(r, t)
-
 
