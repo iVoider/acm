@@ -1,12 +1,8 @@
 import difflib
 import itertools
-import operator
 import warnings
 
-import numpy as np
-import sympy
-
-from sat import gen_unsat, gen_sat, random_cnf, sat_to_clique, random_clause
+from sat import gen_unsat, gen_sat, random_cnf, sat_to_clique
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -88,7 +84,7 @@ def pendentpair(F, V):
     return [vold, vnew]
 
 
-def f_wrapper(G, result, cpm):
+def f_wrapper(G, result, cpm = True):
     nodes_set = set(G.vs.indices)
 
     def f(s):
@@ -100,10 +96,14 @@ def f_wrapper(G, result, cpm):
 
         if g.vcount() < 1 or g.ecount() < 1:
             return 0
+        # for other types (like directed), use:
+
         if cpm:
-         val = ig.community._community_leiden(g, objective_function="CPM", n_iterations=1).modularity
+         #val = leidenalg.find_partition(g, partition_type=leidenalg.CPMVertexPartition, seed=random.getrandbits(16)).modularity
+         val = ig.community._community_leiden(g, objective_function="CPM").modularity
         else:
-         val = ig.community._community_leiden(g, objective_function="modularity", n_iterations=1).modularity
+         #val = leidenalg.find_partition(g, partition_type=leidenalg.ModularityVertexPartition, seed=random.getrandbits(16)).modularity
+         val = ig.community._community_leiden(g, objective_function="modularity").modularity
         result[s] = val
         return val
 
@@ -113,80 +113,62 @@ def f_wrapper(G, result, cpm):
 def solve(g, linear, cpm = True):
     result = {}
     G = ig.Graph.from_networkx(g)
-    q = queyranne(f_wrapper(G, result,  cpm), list(range(0, g.number_of_nodes())))
+    q = queyranne(f_wrapper(G, result, cpm), list(range(0, g.number_of_nodes())))
     ret = {}
     for key, value in q:
         ret[tuple(sorted(
             [(int(G.vs[i]["_nx_name"]) if not linear else tuple(G.vs[i]["_nx_name"])) for i in key]))[0]] = value
-
-    di = {}
-
-    for e in g.edges:
-        di[e] = ret[e[0]] + ret[e[1]]
-
-    return Counter.most_common(di), ret
+    return list(ret.items())
 
 
 def here(g, ksize, cpm = True):
-    i,j = solve(g, False, cpm)
-    k = [(frozenset(x), y) for x, y in i]
+    k = solve(g, False, cpm)
 
     d = dict(k)
 
-    for origin in k:
-        options = {origin[0]}
-        cur = dict()
-
-        pos = set(g.neighbors(tuple(origin[0])[0])) & set(g.neighbors(tuple(origin[0])[1]))
-
+    z = 0
+    mox = set()
+    for origin in k[:1]:
+        z += 1
+        if origin[0] == k[0][0]:
+         options = {origin[0], k[1][0]}
+        else:
+         options = {origin[0], k[0][0]}
+        cur = set()
+        pos = set(g.neighbors(origin[0]))
         while options:
+            one = options.pop()
+            cur.add(one)
 
-            next = options.pop()
-            co = tuple(next)
-            if j[co[0]] > j[co[1]]:
-             cur[co[0]] = None
-             cur[co[1]] = None
-            else:
-             cur[co[1]] = None
-             cur[co[0]] = None
+            pos = pos & set(g.neighbors(one))
 
             if len(pos) > 0:
                 mx = -1
                 mxv = -10e10
-                for p in pos - set(cur.keys()):
-                    result = 0
-                    for pc in cur:
-                        result += d[frozenset({p, pc})]
+                for p in pos:
+                    result = d[p]
                     if result > mxv:
                         mx = p
                         mxv = result
-                for c in cur:
-                    options.add(frozenset({mx, c}))
 
-                pos = pos & set(g.neighbors(mx))
+                options.add(mx)
 
-            if len(cur) == ksize:
-               return True
+        if nx.density(g.subgraph(cur)) == 1:
+            if len(cur) >= ksize:
+             return ksize
+            else:
+             mox.add(len(cur))
 
-    return False
+    return max(mox)
 
 
 if __name__ == '__main__':
- r = 0
  N = 20
- M = int((4.258 * N) + (58.26 * N) ** (-2/3))
- M = 60
- for p in range(0,10000):
-    f = gen_sat(N, M, random_cnf(N))
+ M = 4
+ wall = set()
+ for p in range(0,1):
+    f = gen_sat(N, int(N * M), random_cnf(N))
     #f = gen_unsat(10, 10 * 5)
     g = sat_to_clique(f)
-    t = 0
-    while True:
-      if here(g.copy(), M, True) or here(g.copy(), M, False):
-          break
-      else:
-        print(t)
-        t += 1
-    r += 1
-    print(r, t)
-
+    wall.add(max(here(g.copy(), int(N * M), True), here(g.copy(), int(N * M), False)))
+    print(sorted(wall))
