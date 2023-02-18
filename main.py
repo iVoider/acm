@@ -1,6 +1,9 @@
 import difflib
 import itertools
+import math
 import warnings
+
+import numpy as np
 
 from sat import gen_unsat, gen_sat, random_cnf, sat_to_clique
 
@@ -83,92 +86,60 @@ def pendentpair(F, V):
     V.move_to_end(vstart, last=False)
     return [vold, vnew]
 
+def test_arbitrage(s, d, add = True):
+    val = 0
+    for p in itertools.permutations(s):
+        p = list(p)
+        if add:
+         p.append(p[0])
 
-def f_wrapper(G, result, cpm = True):
-    nodes_set = set(G.vs.indices)
+        v = 1
+        for x, y in zip(p, p[1:]):
+            v *= d[x][y]
+
+        val = max(val, v)
+    return val
+
+
+def f_wrapper(d, result):
 
     def f(s):
         s = tuple(sorted(s))
+        if len(s) < 2:
+            return 0
+
         if s in result:
             return result[s]
 
-        g = G.subgraph(nodes_set - set(s))
+        val = test_arbitrage(s, d)
 
-        if g.vcount() < 1 or g.ecount() < 1:
-            return 0
-        # for other types (like directed), use:
-
-        if cpm:
-         #val = leidenalg.find_partition(g, partition_type=leidenalg.CPMVertexPartition, seed=random.getrandbits(16)).modularity
-         val = ig.community._community_leiden(g, objective_function="CPM").modularity
-        else:
-         #val = leidenalg.find_partition(g, partition_type=leidenalg.ModularityVertexPartition, seed=random.getrandbits(16)).modularity
-         val = ig.community._community_leiden(g, objective_function="modularity").modularity
         result[s] = val
         return val
 
     return f
 
 
-def solve(g, linear, cpm = True):
-    result = {}
-    G = ig.Graph.from_networkx(g)
-    q = queyranne(f_wrapper(G, result, cpm), list(range(0, g.number_of_nodes())))
-    ret = {}
-    for key, value in q:
-        ret[tuple(sorted(
-            [(int(G.vs[i]["_nx_name"]) if not linear else tuple(G.vs[i]["_nx_name"])) for i in key]))[0]] = value
-    return list(ret.items())
-
-
-def here(g, ksize, cpm = True):
-    k = solve(g, False, cpm)
-
-    d = dict(k)
-
-    z = 0
-    mox = set()
-    for origin in k[:1]:
-        z += 1
-        if origin[0] == k[0][0]:
-         options = {origin[0], k[1][0]}
-        else:
-         options = {origin[0], k[0][0]}
-        cur = set()
-        pos = set(g.neighbors(origin[0]))
-        while options:
-            one = options.pop()
-            cur.add(one)
-
-            pos = pos & set(g.neighbors(one))
-
-            if len(pos) > 0:
-                mx = -1
-                mxv = -10e10
-                for p in pos:
-                    result = d[p]
-                    if result > mxv:
-                        mx = p
-                        mxv = result
-
-                options.add(mx)
-
-        if nx.density(g.subgraph(cur)) == 1:
-            if len(cur) >= ksize:
-             return ksize
-            else:
-             mox.add(len(cur))
-
-    return max(mox)
+def solve(d):
+    result = dict()
+    queyranne(f_wrapper(d, result), list(range(0, len(d))))
+    return result
 
 
 if __name__ == '__main__':
- N = 20
- M = 4
- wall = set()
- for p in range(0,1):
-    f = gen_sat(N, int(N * M), random_cnf(N))
-    #f = gen_unsat(10, 10 * 5)
-    g = sat_to_clique(f)
-    wall.add(max(here(g.copy(), int(N * M), True), here(g.copy(), int(N * M), False)))
-    print(sorted(wall))
+
+ d = [[1,1.35,0.93,0.83,7.85,0.92,134.1,1.45,82.82,6.87],
+      [0.74,1,0.69,0.62,5.82,0.69,99.53,1.08,61.46,5.1],
+      [1.07,1.44,1,0.89,8.41,0.99,143.71,1.56,88.75,7.36],
+      [1.2,1.62,1.12,1,9.45,1.11,161.52,1.75,99.74,8.27],
+      [0.13,0.17,0.12,0.11,1,0.12,17.09,0.19,10.55,0.88],
+      [1.08,1.46,1.01,0.9,8.48,1,144.99,1.57,89.54,7.43],
+      [0.01,0.01,0.01,0.01,0.06,0.01,1,0.01,0.62,0.05],
+      [0.69,0.93,0.64,0.57,5.4,0.64,92.25,1,56.97,4.72],
+      [0.01,0.02,0.01,0.01,0.09,0.01,1.62,0.02,1,0.08],
+      [0.15,0.2,0.14,0.12,1.14,0.13,19.53,0.21,12.06,1]
+      ]
+
+ k = solve(d)
+ print(Counter.most_common(k))
+
+print(test_arbitrage([8,7,8,6,0], d, False))
