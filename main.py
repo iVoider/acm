@@ -1,20 +1,53 @@
-import difflib
-import itertools
-import math
-import warnings
+
+
+import random
+from collections import OrderedDict, Counter
 
 import numpy as np
 
-from sat import gen_unsat, gen_sat, random_cnf, sat_to_clique
+from sat import gen_sat, random_cnf, gen_unsat, sat
 
-warnings.simplefilter(action='ignore', category=FutureWarning)
 
-import random
-import leidenalg
-import igraph as ig
-import networkx as nx
-from collections import OrderedDict, deque, defaultdict, Counter
-import time
+def derandomizedSolve(f, n, m):
+    # Assigning
+    assignment = []
+    clauseStatus = []
+
+    for i in range(m):
+        clauseStatus.append(-1)
+
+    for i in range(n):
+
+        trueCount = 0
+        falseCount = 0
+
+        for idx, clause in enumerate(f):
+
+            if (clauseStatus[idx] == -1):
+                if (i in clause):
+                    trueCount += 1
+                if (i + n in clause):
+                    falseCount += 1
+
+        assignment.append(trueCount > falseCount)
+        for idx, clause in enumerate(f):
+            if (i + (trueCount <= falseCount) * n in clause):
+                clauseStatus[idx] = 1
+
+    for i in range(n):
+        assignment.append(not assignment[i])
+
+    # Checking
+    satisfiedClauses = []
+
+    for i in range(m):
+        if (assignment[f[i][0]] or assignment[f[i][1]] or assignment[f[i][2]]):
+            satisfiedClauses.append(i)
+
+    if len(satisfiedClauses) == 0:
+        return 0
+
+    return len(satisfiedClauses)
 
 
 def queyranne(F, V):
@@ -86,60 +119,77 @@ def pendentpair(F, V):
     V.move_to_end(vstart, last=False)
     return [vold, vnew]
 
-def test_arbitrage(s, d, add = True):
-    val = 0
-    for p in itertools.permutations(s):
-        p = list(p)
-        if add:
-         p.append(p[0])
+def cut_formula(f, s):
+    fo = [f[i] for i in s]
 
-        v = 1
-        for x, y in zip(p, p[1:]):
-            v *= d[x][y]
+    vars = {}
+    vars_count = 1
+    nf = []
+    for c in fo:
+        nc = []
+        for v in c:
+            if abs(v) not in vars:
+                vars[abs(v)] = vars_count
+                vars_count += 1
+            nc.append(np.sign(v) * vars[abs(v)])
+        nf.append(nc)
+    return nf, vars_count, len(nf)
 
-        val = max(val, v)
-    return val
 
+def f_wrapper(d, n, result):
 
-def f_wrapper(d, result):
+    r = derandomizedSolve(d, n, len(d))
 
     def f(s):
+
         s = tuple(sorted(s))
-        if len(s) < 2:
-            return 0
 
         if s in result:
             return result[s]
 
-        val = test_arbitrage(s, d)
+        # cf, n , m = cut_formula(d, s)
+        # val1 = derandomizedSolve(cf, n, m)
 
-        result[s] = val
-        return val
+
+        cut = tuple(sorted(set(range(len(d))) - set(s)))
+        cf, n, m = cut_formula(d, cut)
+        val2 = derandomizedSolve(cf, n, m)
+
+        result[s] = val2
+
+        return result[s]
 
     return f
 
 
-def solve(d):
+def solve(d, n):
     result = dict()
-    queyranne(f_wrapper(d, result), list(range(0, len(d))))
-    return result
+    ret = []
+    wor = queyranne(f_wrapper(d, n, result), list(range(0, len(d))))
+    for e, v in wor:
+        ret.append(d[e[0]])
+    return ret
 
 
 if __name__ == '__main__':
 
- d = [[1,1.35,0.93,0.83,7.85,0.92,134.1,1.45,82.82,6.87],
-      [0.74,1,0.69,0.62,5.82,0.69,99.53,1.08,61.46,5.1],
-      [1.07,1.44,1,0.89,8.41,0.99,143.71,1.56,88.75,7.36],
-      [1.2,1.62,1.12,1,9.45,1.11,161.52,1.75,99.74,8.27],
-      [0.13,0.17,0.12,0.11,1,0.12,17.09,0.19,10.55,0.88],
-      [1.08,1.46,1.01,0.9,8.48,1,144.99,1.57,89.54,7.43],
-      [0.01,0.01,0.01,0.01,0.06,0.01,1,0.01,0.62,0.05],
-      [0.69,0.93,0.64,0.57,5.4,0.64,92.25,1,56.97,4.72],
-      [0.01,0.02,0.01,0.01,0.09,0.01,1.62,0.02,1,0.08],
-      [0.15,0.2,0.14,0.12,1.14,0.13,19.53,0.21,12.06,1]
-      ]
+    # Number of clauses
+    m = 4 * 5
 
- k = solve(d)
- print(Counter.most_common(k))
+    # Number of variables
+    n = 5
 
-print(test_arbitrage([8,7,8,6,0], d, False))
+    total = [0] * m
+
+    for j in range(0,10000):
+     formula = gen_unsat(n, m)
+
+     i = 0
+     for c in solve(list(formula), n):
+        if not sat(formula - {c}):
+            total[i] += 1
+        i += 1
+
+
+    print(total)
+
