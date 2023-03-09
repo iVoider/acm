@@ -1,53 +1,17 @@
+import difflib
+import itertools
+import warnings
 
+from sat import gen_unsat, gen_sat, random_cnf, sat_to_clique, sat
+
+warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import random
-from collections import OrderedDict, Counter
-
-import numpy as np
-
-from sat import gen_sat, random_cnf, gen_unsat, sat
-
-
-def derandomizedSolve(f, n, m):
-    # Assigning
-    assignment = []
-    clauseStatus = []
-
-    for i in range(m):
-        clauseStatus.append(-1)
-
-    for i in range(n):
-
-        trueCount = 0
-        falseCount = 0
-
-        for idx, clause in enumerate(f):
-
-            if (clauseStatus[idx] == -1):
-                if (i in clause):
-                    trueCount += 1
-                if (i + n in clause):
-                    falseCount += 1
-
-        assignment.append(trueCount > falseCount)
-        for idx, clause in enumerate(f):
-            if (i + (trueCount <= falseCount) * n in clause):
-                clauseStatus[idx] = 1
-
-    for i in range(n):
-        assignment.append(not assignment[i])
-
-    # Checking
-    satisfiedClauses = []
-
-    for i in range(m):
-        if (assignment[f[i][0]] or assignment[f[i][1]] or assignment[f[i][2]]):
-            satisfiedClauses.append(i)
-
-    if len(satisfiedClauses) == 0:
-        return 0
-
-    return len(satisfiedClauses)
+import leidenalg
+import igraph as ig
+import networkx as nx
+from collections import OrderedDict, deque, defaultdict, Counter
+import time
 
 
 def queyranne(F, V):
@@ -119,77 +83,77 @@ def pendentpair(F, V):
     V.move_to_end(vstart, last=False)
     return [vold, vnew]
 
-def cut_formula(f, s):
-    fo = [f[i] for i in s]
 
-    vars = {}
-    vars_count = 1
-    nf = []
-    for c in fo:
-        nc = []
-        for v in c:
-            if abs(v) not in vars:
-                vars[abs(v)] = vars_count
-                vars_count += 1
-            nc.append(np.sign(v) * vars[abs(v)])
-        nf.append(nc)
-    return nf, vars_count, len(nf)
-
-
-def f_wrapper(d, n, result):
-
-    r = derandomizedSolve(d, n, len(d))
+def f_wrapper(G, result, cpm=True):
+    nodes_set = set(G.vs.indices)
 
     def f(s):
-
         s = tuple(sorted(s))
-
         if s in result:
             return result[s]
 
-        # cf, n , m = cut_formula(d, s)
-        # val1 = derandomizedSolve(cf, n, m)
+        g = G.subgraph(nodes_set - set(s))
 
+        if g.vcount() < 1 or g.ecount() < 1:
+            return 0
+        # for other types (like directed), use:
 
-        cut = tuple(sorted(set(range(len(d))) - set(s)))
-        cf, n, m = cut_formula(d, cut)
-        val2 = derandomizedSolve(cf, n, m)
-
-        result[s] = val2
-
-        return result[s]
+        if cpm:
+            # val = leidenalg.find_partition(g, partition_type=leidenalg.RBConfigurationVertexPartition, seed=random.getrandbits(16)).modularity
+            val = ig.community._community_leiden(g, objective_function="CPM").modularity
+        else:
+            #val = leidenalg.find_partition(g, partition_type=leidenalg.ModularityVertexPartition, seed=random.getrandbits(16)).modularity
+            val = ig.community._community_leiden(g, objective_function="modularity").modularity
+        result[s] = val
+        return val
 
     return f
 
 
-def solve(d, n):
-    result = dict()
-    ret = []
-    wor = queyranne(f_wrapper(d, n, result), list(range(0, len(d))))
-    for e, v in wor:
-        ret.append(d[e[0]])
-    return ret
+def solve(g, keep, linear, cpm=True):
+    result = {}
+    G = ig.Graph.from_networkx(g)
+    q = queyranne(f_wrapper(G, result, cpm), list(range(0, g.number_of_nodes())))
+    ret = {}
+    for key, value in q:
+        ret[tuple(sorted(
+            [(int(G.vs[i]["_nx_name"]) if not linear else tuple(G.vs[i]["_nx_name"])) for i in key]))[0]] = value
+    return list(ret.items())
 
 
+def here(g, keep, ksize, cpm=True):
+    k = dict(solve(g, keep, False, cpm))
+    mxval = None
+    cur = None
+    for e in keep.keys():
+        sur = 0
+        for l in e:
+            sur += k[l]
+        if mxval is None or sur > mxval:
+            mxval = sur
+            cur = keep[e]
+
+    return cur
+
+
+# https://www.fmcad.org/FMCAD16/slides/s3t2.pdf
 if __name__ == '__main__':
+    N = 9
+    M = 4
 
-    # Number of clauses
-    m = 4 * 5
+    yes = 0
 
-    # Number of variables
-    n = 5
+    for ui in range(0, 100):
+     #f = gen_sat(N, int(N * M), random_cnf(N))
+     f = gen_unsat(N, int(N * M))
+     g, k = sat_to_clique(f)
 
-    total = [0] * m
+     a = here(g.copy(), k, int(N * M), True)
+     # b = here(g.copy(), k, int(N * M), False)
 
-    for j in range(0,10000):
-     formula = gen_unsat(n, m)
+     zf = f.copy()
+     zf.remove(a)
 
-     i = 0
-     for c in solve(list(formula), n):
-        if not sat(formula - {c}):
-            total[i] += 1
-        i += 1
+     yes += sat(zf)
 
-
-    print(total)
-
+    print(yes)
