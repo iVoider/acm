@@ -2,7 +2,9 @@ import difflib
 import itertools
 import warnings
 
-from sat import gen_unsat, gen_sat, random_cnf, sat_to_clique, sat
+import numpy as np
+
+from sat import gen_unsat, gen_sat, random_cnf, sat_to_clique, sat, solution, asat, mincore
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -102,7 +104,7 @@ def f_wrapper(G, result, cpm=True):
             # val = leidenalg.find_partition(g, partition_type=leidenalg.RBConfigurationVertexPartition, seed=random.getrandbits(16)).modularity
             val = ig.community._community_leiden(g, objective_function="CPM").modularity
         else:
-            #val = leidenalg.find_partition(g, partition_type=leidenalg.ModularityVertexPartition, seed=random.getrandbits(16)).modularity
+            # val = leidenalg.find_partition(g, partition_type=leidenalg.ModularityVertexPartition, seed=random.getrandbits(16)).modularity
             val = ig.community._community_leiden(g, objective_function="modularity").modularity
         result[s] = val
         return val
@@ -122,38 +124,33 @@ def solve(g, keep, linear, cpm=True):
 
 
 def here(g, keep, ksize, cpm=True):
-    k = dict(solve(g, keep, False, cpm))
-    mxval = None
-    cur = None
-    for e in keep.keys():
-        sur = 0
-        for l in e:
-            sur += k[l]
-        if mxval is None or sur > mxval:
-            mxval = sur
-            cur = keep[e]
+    k = solve(g, keep, False, cpm)
+    dk = dict.fromkeys(keep.values(), 0)
+    for e, v in k:
+        dk[keep[e]] += v
 
-    return cur
+    return list(dict(Counter.most_common(dk)).keys())
 
 
-# https://www.fmcad.org/FMCAD16/slides/s3t2.pdf
 if __name__ == '__main__':
-    N = 9
+    N = 8
     M = 4
 
     yes = 0
+    no = 0
+
+    ara = 0
 
     for ui in range(0, 100):
-     #f = gen_sat(N, int(N * M), random_cnf(N))
-     f = gen_unsat(N, int(N * M))
-     g, k = sat_to_clique(f)
+        # f = gen_sat(N, int(N * M), random_cnf(N))
+        f = gen_unsat(N, int(N * M))
+        g, k = sat_to_clique(f)
 
-     a = here(g.copy(), k, int(N * M), True)
-     # b = here(g.copy(), k, int(N * M), False)
+        a = here(g.copy(), k, int(N * M), False)
 
-     zf = f.copy()
-     zf.remove(a)
+        try:
+            yes += a[ara] in mincore(f, [a[ara]])
+        except:
+            no += 1
 
-     yes += sat(zf)
-
-    print(yes)
+    print(yes, no)
