@@ -4,12 +4,11 @@ import warnings
 
 import numpy as np
 
-from sat import gen_unsat, gen_sat, random_cnf, sat_to_clique, sat, solution, asat, mincore
+from sat import gen_unsat, gen_sat, random_cnf, sat, solution
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
 import random
-import leidenalg
 import igraph as ig
 import networkx as nx
 from collections import OrderedDict, deque, defaultdict, Counter
@@ -132,25 +131,55 @@ def here(g, keep, ksize, cpm=True):
     return list(dict(Counter.most_common(dk)).keys())
 
 
+def sat_to_clique(formula):
+    g = nx.Graph()
+    mapping = {}
+    node = 0
+
+    for clause in formula:
+        for literal in clause:
+            mapping[node] = literal
+            node += 1
+
+    nodes = list(zip(*[iter(range(0, 3 * len(formula)))]*3))
+
+    while nodes:
+        clause = nodes.pop()
+        for element in nodes:
+            for x, y in itertools.product(clause, element):
+                if mapping[x] != mapping[y] * -1:
+                    g.add_edge(x, y)
+
+    return g, mapping
+
+
 if __name__ == '__main__':
-    N = 8
-    M = 4
+    N = 5
+    M = 5
 
-    yes = 0
-    no = 0
+    for ui in range(0, 10):
+        f = gen_sat(N, int(N * M), random_cnf(N))
 
-    ara = 0
-
-    for ui in range(0, 100):
-        # f = gen_sat(N, int(N * M), random_cnf(N))
-        f = gen_unsat(N, int(N * M))
+        #f = gen_unsat(N, int(N * M))
+        zf = list(f.copy())
         g, k = sat_to_clique(f)
+        a = here(g.copy(), k, int(N * M), True)
 
-        a = here(g.copy(), k, int(N * M), False)
+        #random.shuffle(zf)
 
-        try:
-            yes += a[ara] in mincore(f, [a[ara]])
-        except:
-            no += 1
+        while True:
+            q = zf.pop()
+            zf.insert(0, (q[0] * [-1,1][random.randrange(2)], q[1] * [-1,1][random.randrange(2)], q[2] * [-1,1][random.randrange(2)]))
+            if not sat(zf):
+                break
+            else:
+                zf.insert(0, q)
 
-    print(yes, no)
+        print(sat(zf), set(solution(f)) == set(solution(zf)))
+        g, k = sat_to_clique(zf)
+        b = here(g.copy(), k, int(N * M), True)
+        if b != a:
+            print("Sshit")
+            print(a)
+            print(b)
+            break
