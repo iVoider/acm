@@ -1,18 +1,18 @@
 import difflib
 import itertools
 import warnings
+import leidenalg
 
 import numpy as np
 
-from sat import gen_unsat, gen_sat, random_cnf, sat, solution
+from sat import gen_unsat, gen_sat, random_cnf, sat, solution, asol, mincore
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
-import random
 import igraph as ig
 import networkx as nx
-from collections import OrderedDict, deque, defaultdict, Counter
-import time
+
+from collections import OrderedDict, Counter
 
 
 def queyranne(F, V):
@@ -89,7 +89,9 @@ def f_wrapper(G, result, cpm=True):
     nodes_set = set(G.vs.indices)
 
     def f(s):
+
         s = tuple(sorted(s))
+
         if s in result:
             return result[s]
 
@@ -98,37 +100,42 @@ def f_wrapper(G, result, cpm=True):
         if g.vcount() < 1 or g.ecount() < 1:
             return 0
         # for other types (like directed), use:
+        partition = ig.community._community_leiden(g, objective_function="CPM" if cpm else "modularity",
+                                                   n_iterations=1).modularity
 
-        if cpm:
-            # val = leidenalg.find_partition(g, partition_type=leidenalg.RBConfigurationVertexPartition, seed=random.getrandbits(16)).modularity
-            val = ig.community._community_leiden(g, objective_function="CPM").modularity
-        else:
-            # val = leidenalg.find_partition(g, partition_type=leidenalg.ModularityVertexPartition, seed=random.getrandbits(16)).modularity
-            val = ig.community._community_leiden(g, objective_function="modularity").modularity
-        result[s] = val
-        return val
+        result[s] = partition
+        return partition
 
     return f
 
 
-def solve(g, keep, linear, cpm=True):
+def solve(g, linear, cpm=True):
     result = {}
+
     G = ig.Graph.from_networkx(g)
     q = queyranne(f_wrapper(G, result, cpm), list(range(0, g.number_of_nodes())))
     ret = {}
     for key, value in q:
         ret[tuple(sorted(
             [(int(G.vs[i]["_nx_name"]) if not linear else tuple(G.vs[i]["_nx_name"])) for i in key]))[0]] = value
-    return list(ret.items())
+
+    return ret.items()
 
 
-def here(g, keep, ksize, cpm=True):
-    k = solve(g, keep, False, cpm)
+def here(g, keep, cpm=True):
+    k = solve(g, False, cpm)
     dk = dict.fromkeys(keep.values(), 0)
     for e, v in k:
         dk[keep[e]] += v
 
-    return list(dict(Counter.most_common(dk)).keys())
+    res = {}
+    for var in [abs(i) for i in keep.values()]:
+        if cpm:
+            res[var if abs(dk[var]) > abs(dk[var * -1]) else var * -1] = abs(abs(dk[var]) - abs(dk[var * -1]))
+        else:
+            res[var if abs(dk[var]) < abs(dk[var * -1]) else var * -1] = abs(abs(dk[var]) - abs(dk[var * -1]))
+
+    return list((dict(Counter.most_common(res)).keys()))
 
 
 def sat_to_clique(formula):
@@ -141,7 +148,7 @@ def sat_to_clique(formula):
             mapping[node] = literal
             node += 1
 
-    nodes = list(zip(*[iter(range(0, 3 * len(formula)))]*3))
+    nodes = list(zip(*[iter(range(0, 3 * len(formula)))] * 3))
 
     while nodes:
         clause = nodes.pop()
@@ -154,32 +161,21 @@ def sat_to_clique(formula):
 
 
 if __name__ == '__main__':
-    N = 5
-    M = 5
+    N = 4
+    M = 3
 
-    for ui in range(0, 10):
-        f = gen_sat(N, int(N * M), random_cnf(N))
+    yes = 0
+    for ui in range(0, 1000):
+        # f = list(gen_unsat(N, int(N * M)))
+        f = list(gen_sat(N, int(N * M), random_cnf(N)))
 
-        #f = gen_unsat(N, int(N * M))
-        zf = list(f.copy())
         g, k = sat_to_clique(f)
-        a = here(g.copy(), k, int(N * M), True)
+        j = here(g, k, True)
+        sol = len(asol(f, asum=[j[0]])) > 0
 
-        #random.shuffle(zf)
+        j1 = here(g, k, False)
+        sol2 = len(asol(f, asum=[j1[0]])) > 0
 
-        while True:
-            q = zf.pop()
-            zf.insert(0, (q[0] * [-1,1][random.randrange(2)], q[1] * [-1,1][random.randrange(2)], q[2] * [-1,1][random.randrange(2)]))
-            if not sat(zf):
-                break
-            else:
-                zf.insert(0, q)
+        yes += sol or sol2
 
-        print(sat(zf), set(solution(f)) == set(solution(zf)))
-        g, k = sat_to_clique(zf)
-        b = here(g.copy(), k, int(N * M), True)
-        if b != a:
-            print("Sshit")
-            print(a)
-            print(b)
-            break
+    print(yes)
