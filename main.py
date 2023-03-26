@@ -4,6 +4,8 @@ import warnings
 import leidenalg
 
 import numpy as np
+import scipy.stats
+from scipy.stats import mannwhitneyu, ttest_ind, zscore
 
 from sat import gen_unsat, gen_sat, random_cnf, sat, solution, asol, mincore
 
@@ -101,7 +103,7 @@ def f_wrapper(G, result, cpm=True):
             return 0
         # for other types (like directed), use:
         partition = ig.community._community_leiden(g, objective_function="CPM" if cpm else "modularity",
-                                                   n_iterations=1).modularity
+                                                   n_iterations=0).modularity
 
         result[s] = partition
         return partition
@@ -109,33 +111,44 @@ def f_wrapper(G, result, cpm=True):
     return f
 
 
-def solve(g, linear, cpm=True):
+def solve(g, cpm=True):
     result = {}
+    return queyranne(f_wrapper(g, result, cpm), list(range(0, g.vcount())))
 
+
+def here(g, N, M):
     G = ig.Graph.from_networkx(g)
-    q = queyranne(f_wrapper(G, result, cpm), list(range(0, g.number_of_nodes())))
-    ret = {}
-    for key, value in q:
-        ret[tuple(sorted(
-            [(int(G.vs[i]["_nx_name"]) if not linear else tuple(G.vs[i]["_nx_name"])) for i in key]))[0]] = value
+    candidates = {}
 
-    return ret.items()
+    for v in G.es.indices:
+        H = G.copy()
+        H.delete_edges([v])
+        candidates[v] = ig.community._community_leiden(H, objective_function="CPM", n_iterations=0).modularity
 
+    bestval = min(candidates.values())
 
-def here(g, keep, cpm=True):
-    k = solve(g, False, cpm)
-    dk = dict.fromkeys(keep.values(), 0)
-    for e, v in k:
-        dk[keep[e]] += v
+    consider = {}
+    for k, v in candidates.items():
+        if v == bestval:
+            H = G.copy()
+            H.delete_edges([k])
+            c = ig.community._community_leiden(H, objective_function="modularity", n_iterations=1).modularity * -1
 
-    res = {}
-    for var in [abs(i) for i in keep.values()]:
-        if cpm:
-            res[var if abs(dk[var]) > abs(dk[var * -1]) else var * -1] = abs(abs(dk[var]) - abs(dk[var * -1]))
-        else:
-            res[var if abs(dk[var]) < abs(dk[var * -1]) else var * -1] = abs(abs(dk[var]) - abs(dk[var * -1]))
+            H = G.copy()
+            H.delete_vertices([G.es[k].source])
+            a = ig.community._community_leiden(H, objective_function="CPM", n_iterations=0).modularity
+            a1 = ig.community._community_leiden(H, objective_function="modularity", n_iterations=1).modularity * -1
 
-    return list((dict(Counter.most_common(res)).keys()))
+            H = G.copy()
+            H.delete_vertices([G.es[k].target])
+            b = ig.community._community_leiden(H, objective_function="CPM", n_iterations=0).modularity
+            b1 = ig.community._community_leiden(H, objective_function="modularity", n_iterations=1).modularity * -1
+
+            consider[k] = (a + b, c, abs(abs(a) - abs(b)), a1 + b1, abs(abs(a1) - abs(b1)))
+
+    # G.delete_edges([min(consider, key=consider.get)])
+    # res = (G.clique_number() >= N * M)
+    return 1, len(consider.values()) - len(set(consider.values())), len(candidates.values()) - len(set(candidates.values()))
 
 
 def sat_to_clique(formula):
@@ -165,17 +178,21 @@ if __name__ == '__main__':
     M = 3
 
     yes = 0
-    for ui in range(0, 1000):
-        # f = list(gen_unsat(N, int(N * M)))
-        f = list(gen_sat(N, int(N * M), random_cnf(N)))
+    adup = set()
+    zup = set()
+    for ui in range(0, 10000):
 
+        f = gen_sat(N, int(N * M), random_cnf(N))
+        #f = gen_unsat(N,int(N * M))
         g, k = sat_to_clique(f)
-        j = here(g, k, True)
-        sol = len(asol(f, asum=[j[0]])) > 0
-
-        j1 = here(g, k, False)
-        sol2 = len(asol(f, asum=[j1[0]])) > 0
-
-        yes += sol or sol2
+        y, d, z = here(g, N, M)
+        yes += y
+        adup.add(z)
+        zup.add(d)
 
     print(yes)
+    print(sorted(adup))
+    print(sorted(zup))
+
+    #[462, 467, 470, 473, 474, 475, 476, 477, 478, 479, 480, 481, 482, 483, 484, 485, 486, 487, 488, 489, 490, 491, 492, 510]
+    #[0, 1, 2, 3, 4, 5, 6, 8, 9, 11, 12, 14, 16, 23, 36, 39, 61, 63]
