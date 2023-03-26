@@ -18,31 +18,43 @@ import networkx as nx
 
 from collections import OrderedDict, Counter
 
+
+def NormalizeData(data):
+    return (data - np.min(data)) / (np.max(data) - np.min(data))
+
+
 def here(g, size):
     G = ig.Graph.from_networkx(g)
     candidates = {}
 
-    for v in G.vs.indices:
+    for _ in range(0, size):
+
+        for v in G.es.indices:
+            H = G.copy()
+            H.delete_edges(v)
+            if _ != 0:
+                candidates[v] = ig.community._community_leiden(H, objective_function="modularity",
+                                                               weights="weight", n_iterations=1).modularity
+            else:
+                candidates[v] = ig.community._community_leiden(H, objective_function="modularity",
+                                                               n_iterations=1).modularity
+
+        for c in candidates:
+            G.es[c]["weight"] = candidates[c]
+
+        if len(set(candidates.values())) == G.ecount():
+            break
+
+    crucial = set()
+    for v in G.es.indices:
         H = G.copy()
-        H.delete_vertices(v)
-        candidates[v] = ig.community._community_leiden(H, objective_function="CPM", n_iterations=0).modularity
+        H.delete_edges(v)
+        if H.clique_number() != size:
+            crucial.add(v)
 
-    consider = {}
-
-    for e in G.vs[min(candidates, key=candidates.get)].incident():
-        H = G.copy()
-        H.delete_edges(e)
-        consider[e.index] = ig.community._community_leiden(H, objective_function="CPM", n_iterations=0).modularity
-
-    G.delete_edges(min(consider, key=consider.get))
-
-    ret = G.clique_number() >= size
-    if not ret:
-        print(list(reversed(Counter(candidates).most_common())))
-        print(list(reversed(Counter(consider).most_common())))
-        print()
-
-    return ret
+    a,b = zip(*Counter(candidates).most_common())
+    print(sorted([a.index(c) for c in crucial]), len(candidates))
+    return 1
 
 
 # check remove edge between two smallest nodes values
@@ -71,14 +83,14 @@ def sat_to_clique(formula):
 
 if __name__ == '__main__':
     N = 4
-    size = 12
+    size = 13
 
     start = time.time()
 
     yes = 0
-    for ui in range(0, 100000):
+    for ui in range(0, 100):
         f = gen_sat(N, size, random_cnf(N))
-        # f = gen_unsat(N,int(N * M))
+        # f = gen_unsat(N,size)
         g, k = sat_to_clique(f)
         yes += here(g, size)
 
