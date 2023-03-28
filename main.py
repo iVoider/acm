@@ -18,44 +18,31 @@ import networkx as nx
 
 from collections import OrderedDict, Counter
 
-
-def NormalizeData(data):
-    return (data - np.min(data)) / (np.max(data) - np.min(data))
-
-
 def here(g, size):
     G = ig.Graph.from_networkx(g)
     candidates = {}
 
-    for _ in range(0, size):
-
-        for v in G.es.indices:
-            H = G.copy()
-            H.delete_edges(v)
-            if _ != 0:
-                candidates[v] = ig.community._community_leiden(H, objective_function="modularity",
-                                                               weights="weight", n_iterations=1).modularity
-            else:
-                candidates[v] = ig.community._community_leiden(H, objective_function="modularity",
-                                                               n_iterations=1).modularity
-
-        for c in candidates:
-            G.es[c]["weight"] = candidates[c]
-
-        if len(set(candidates.values())) == G.ecount():
-            break
-
-    crucial = set()
-    for v in G.es.indices:
+    for v in G.vs.indices:
         H = G.copy()
-        H.delete_edges(v)
-        if H.clique_number() != size:
-            crucial.add(v)
+        H.delete_vertices(v)
+        candidates[v] = ig.community._community_leiden(H, objective_function="CPM", n_iterations=0).modularity
 
-    a,b = zip(*Counter(candidates).most_common())
-    print(sorted([a.index(c) for c in crucial]), len(candidates))
-    return 1
+    consider = {}
 
+    for e in G.vs[min(candidates, key=candidates.get)].incident():
+        H = G.copy()
+        H.delete_edges(e)
+        a = ig.community._community_leiden(H, objective_function="CPM", n_iterations=0).modularity
+
+        H = G.copy()
+        H.delete_vertices([e.source, e.target])
+        b = ig.community._community_leiden(H, objective_function="CPM", n_iterations=0).modularity * -1
+
+        consider[e.index] = (a, b)
+
+    G.delete_edges(min(consider, key=consider.get))
+
+    return G.clique_number() >= size
 
 # check remove edge between two smallest nodes values
 
@@ -88,7 +75,7 @@ if __name__ == '__main__':
     start = time.time()
 
     yes = 0
-    for ui in range(0, 100):
+    for ui in range(0, 100000):
         f = gen_sat(N, size, random_cnf(N))
         # f = gen_unsat(N,size)
         g, k = sat_to_clique(f)
