@@ -25,22 +25,9 @@ def here(g, size):
     for v in G.vs.indices:
         H = G.copy()
         H.delete_vertices(v)
-        candidates[v] = ig.community._community_leiden(H, objective_function="CPM", n_iterations=0).modularity
+        candidates[v] = ig.community._community_leiden(H, objective_function="CPM", n_iterations=0).modularity / len(G.neighbors(v))
 
-    consider = {}
-
-    for e in G.vs[min(candidates, key=candidates.get)].incident():
-        H = G.copy()
-        H.delete_edges(e)
-        a = ig.community._community_leiden(H, objective_function="CPM", n_iterations=0).modularity
-
-        H = G.copy()
-        H.delete_vertices([e.source, e.target])
-        b = ig.community._community_leiden(H, objective_function="CPM", n_iterations=0).modularity * -1
-
-        consider[e.index] = (a, b)
-
-    G.delete_edges(min(consider, key=consider.get))
+    G.delete_vertices(min(candidates, key=candidates.get))
 
     return G.clique_number() >= size
 
