@@ -85,49 +85,64 @@ def pendentpair(F, V):
     return [vold, vnew]
 
 
-def f_wrapper(G, result, cpm=True):
+def f_wrapper(G, result):
     nodes_set = set(G.vs.indices)
 
-    bv = ig.community._community_leiden(G, objective_function="modularity", n_iterations=2, resolution=0.1).modularity
+    iters = 1
+    reso = 0
+    objf = "CPM"
+
+    bv = abs(ig.community._community_leiden(G, objective_function=objf, n_iterations=iters,
+                                            resolution=reso).modularity * len(nodes_set))
 
     def f(s):
 
         s = tuple(sorted(s))
+        s1 = tuple(nodes_set - set(s))
 
-        if s in result:
-            return result[s]
+        if s in result or s1 in result:
+            return bv - result[s] + result[s1]
 
-        g = G.subgraph(nodes_set - set(s))
-        h = G.subgraph(set(s))
+        g = G.subgraph(s1)
+        h = G.subgraph(s)
 
         if g.vcount() < 1 or g.ecount() < 1 or h.vcount() < 1 or h.ecount() < 1:
             return 0
 
-        # for other types (like directed), use:
-        partition = bv - ((ig.community._community_leiden(g, objective_function="modularity", n_iterations=2, resolution=0.1).modularity
-                     + ig.community._community_leiden(h, objective_function="modularity",n_iterations=2, resolution=0.1).modularity) / 2)
+        result[s1] = abs(ig.community._community_leiden(
+            g,
+            objective_function=objf,
+            n_iterations=iters,
+            resolution=reso).modularity * g.vcount())
 
+        result[s] = abs(ig.community._community_leiden(
+            h,
+            objective_function=objf,
+            n_iterations=iters,
+            resolution=reso).modularity * h.vcount())
+
+        partition = bv - result[s1] + result[s]
         result[s] = partition
         return partition
 
     return f
 
 
-def solve(g, keep, cpm=True):
+def solve(g, keep):
     result = {}
 
     G = ig.Graph.from_networkx(g)
-    q = queyranne(f_wrapper(G, result, cpm), list(range(0, g.number_of_nodes())))
+    q = queyranne(f_wrapper(G, result), list(range(0, g.number_of_nodes())))
     ret = {}
     for key, value in result.items():
-
         to = [keep[int(G.vs[i]["_nx_name"])] for i in key]
         ret[tuple(to)] = value
+
     return ret
 
 
-def here(g, keep, cpm=True):
-    k = solve(g, keep, cpm)
+def here(g, keep):
+    k = solve(g, keep)
 
     return Counter.most_common(k)
 
@@ -154,25 +169,38 @@ def sat_to_clique(formula):
     return g, mapping
 
 
+def checksat(f, ass):
+    for c in f:
+        if len(ass & set(c)) == 0:
+            return False
+    return True
+
+
 if __name__ == '__main__':
     N = 4
     M = 3
 
     yes = 0
+    mx = set()
     for ui in range(0, 100):
-        #f = list(gen_unsat(N, int(N * M)))
+        # f = list(gen_unsat(N, int(N * M)))
         f = gen_sat(N, int(N * M), random_cnf(N))
         g, k = sat_to_clique(f)
-        for j, v in here(g, k, True):
-         if len(set(j)) >= N:
-          res = set()
-          for v, _ in Counter(j).most_common():
-            if v * -1 not in res:
-                res.add(v)
-          qubei = asol(f, asum=list(res))
-          if len(res) == N and len(qubei) > 0:
-            yes += 1
-            break
+        p = 0
+        ans = here(g, k)
+        mx.add(len(ans))
+        for j, v in ans:
+            p += 1
+            if len(set(j)) >= N:
+                res = set()
+                for v, _ in reversed(Counter(j).most_common()):
+                    if v * -1 not in res:
+                        res.add(v)
+                if len(res) == N and checksat(f, set(res)):
+                    yes += 1
+                    break
 
     print(yes)
+    print(min(mx), max(mx))
 
+    #         if Counter([int(g.vs[i]["_nx_name"]) for i in s1]).most_common():
