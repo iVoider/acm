@@ -1,3 +1,5 @@
+import itertools
+
 from pysat.solvers import Glucose4
 import random
 import numpy as np
@@ -101,6 +103,14 @@ def gen_unsat(N, size):
         while len(formula) < msize:
             clause = random_clause(literals)
             formula.add(clause)
+
+    gars = set()
+    for c in formula:
+        for p in c:
+            gars.add(p)
+
+    if len(gars) != N * 2:
+        return gen_unsat(N, size)
     return formula
 
 
@@ -309,3 +319,30 @@ def generate_problem(degree, size, isomorphic, directed=True):
         return generate_problem(degree, size, isomorphic)
 
     return A, B, node_mapping
+
+def sat_to_clique(formula):
+    g = nx.Graph()
+    mapping = {}
+    node = 0
+
+    for clause in formula:
+        for literal in clause:
+            mapping[node] = literal
+            node += 1
+
+    nodes = list(zip(*[iter(range(0, 3 * len(formula)))] * 3))
+
+    while nodes:
+        clause = nodes.pop()
+        for element in nodes:
+            for x, y in itertools.product(clause, element):
+                if mapping[x] != mapping[y] * -1:
+                    g.add_edge(x, y)
+
+    return g, mapping
+
+def checksat(f, ass):
+    for c in f:
+        if len(ass & set(c)) == 0:
+            return False
+    return True
