@@ -5,7 +5,7 @@ import leidenalg
 
 import numpy as np
 
-from sat import gen_unsat, gen_sat, random_cnf, sat, solution, asol, mincore
+from sat import gen_unsat, gen_sat, random_cnf, sat, solution, asol, mincore, sat_to_clique, checksat
 
 warnings.simplefilter(action='ignore', category=FutureWarning)
 
@@ -175,42 +175,13 @@ def here(g, keep, f, N):
     return solve(g, keep, f, N)
 
 
-def sat_to_clique(formula):
-    g = nx.Graph()
-    mapping = {}
-    node = 0
-
-    for clause in formula:
-        for literal in clause:
-            mapping[node] = literal
-            node += 1
-
-    nodes = list(zip(*[iter(range(0, 3 * len(formula)))] * 3))
-
-    while nodes:
-        clause = nodes.pop()
-        for element in nodes:
-            for x, y in itertools.product(clause, element):
-                if mapping[x] != mapping[y] * -1:
-                    g.add_edge(x, y)
-
-    return g, mapping
-
-
-def checksat(f, ass):
-    for c in f:
-        if len(ass & set(c)) == 0:
-            return False
-    return True
-
-
 if __name__ == '__main__':
-    N = 20
+    N = 10
     M = 3
 
     yes = 0
     TM = set()
-    for ui in range(0, 1):
+    for ui in range(0, 10):
         #f = list(gen_unsat(N, int(N * M)))
         f = gen_sat(N, int(N * M), random_cnf(N))
         g, k = sat_to_clique(f)
