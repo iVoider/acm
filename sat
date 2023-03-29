@@ -1,0 +1,311 @@
+from pysat.solvers import Glucose4
+import random
+import numpy as np
+
+
+def random_clause(literals):
+    def rand_sign():
+        return 1 if random.random() < 0.5 else -1
+
+    clause = sorted(random.sample(literals, 3))
+    return (clause[0] * rand_sign(), clause[1] * rand_sign(), clause[2] * rand_sign())
+
+
+def random_cnf(N):
+    cnf = set()
+    for literal in range(1, N + 1):
+        if bool(random.getrandbits(1)):
+            cnf.add(literal * -1)
+        else:
+            cnf.add(literal)
+    return cnf
+
+
+def sat(formula):
+    g = Glucose4()
+    g.append_formula(formula)
+    result = g.solve()
+    g.delete()
+    return result
+
+
+def solution(formula):
+    g = Glucose4()
+    g.append_formula(formula)
+    g.solve()
+    result = g.get_model()
+    g.delete()
+    if result == None:
+        return []
+    return result
+
+
+def asol(formula, asum=[]):
+    g = Glucose4()
+    g.append_formula(formula)
+    g.solve(assumptions=asum)
+    result = g.get_model()
+    g.delete()
+    if result is None:
+        return []
+    return result
+
+
+def mincore(formula, asum=[]):
+    g = Glucose4()
+    g.append_formula(formula)
+    g.solve(assumptions=asum)
+    g.get_status()
+    result = g.get_core()
+    g.delete()
+    if result is None:
+        return []
+    return result
+
+
+def gen_unsat(N, size):
+    def numvar(formula):
+        count = set()
+        for c in formula:
+            for l in c:
+                count.add(abs(l))
+        return len(count), count
+
+    big = False
+    if N > 100:
+        big = True
+        M = N
+        msize = size
+        N = random.randint(10, 30)
+        size = int(N * random.uniform(3.1, 4.6))
+
+    formula = set()
+    literals = range(1, N + 1)
+    while sat(formula) or len(formula) == 0:
+        formula = set()
+        while len(formula) < size:
+            clause = random_clause(literals)
+            formula.add(clause)
+
+    if big:
+        num, all = numvar(formula)
+        literals = range(1, M + 1)
+        replace = dict(zip(all, random.sample(literals, num)))
+
+        nw = set()
+        for c in formula:
+            nw.add(tuple([int(np.sign(i) * replace[abs(i)]) for i in c]))
+
+        formula = nw
+
+        while len(formula) < msize:
+            clause = random_clause(literals)
+            formula.add(clause)
+    return formula
+
+
+def gen_sat(N, size, cnf={1, 2, 3, 4}):
+    def one_or_more(clause):
+        for l in clause:
+            if l in cnf:
+                return True
+        return False
+
+    max_steps = N * 1000
+    formula = set()
+    steps = 0
+    literals = range(1, N + 1)
+    while len(formula) < size:
+        clause = random_clause(literals)
+        if one_or_more(clause):
+            formula.add(clause)
+        steps += 1
+        if steps > max_steps:
+            break
+
+    gars = set()
+    for c in formula:
+        for p in c:
+            gars.add(p)
+
+    if len(gars) != N * 2 or len(formula) != size:
+        return gen_sat(N, size, cnf)
+
+    return formula
+
+
+def read_cnf_file(upload):
+    cnf = list()
+    cnf.append(list())
+    maxvar = 0
+
+    for line in upload:
+        tokens = line.split()
+        if len(tokens) == 0 or tokens[0] == "p" or tokens[0] == "c":
+            continue
+        for tok in tokens:
+            lit = int(tok)
+            maxvar = max(maxvar, abs(lit))
+            if lit == 0:
+                cnf.append(list())
+            else:
+                cnf[-1].append(lit)
+
+    assert len(cnf[-1]) == 0
+    cnf.pop()
+
+    new_cnf = list()
+    for clause in cnf:
+        while len(clause) > 3:
+            new_clause = list()
+            for i in range(0, len(clause), 2):
+                if i + 1 < len(clause):
+                    new_cnf.append(list())
+                    new_cnf[-1].append(clause[i])
+                    new_cnf[-1].append(clause[i + 1])
+                    maxvar += 1
+                    new_cnf[-1].append(-maxvar)
+                    new_clause.append(maxvar)
+                else:
+                    new_clause.append(clause[i])
+            clause = new_clause
+        new_cnf.append(clause)
+
+    result = set()
+    uniq_lits = set()
+    for clause in new_cnf:
+        for l in clause:
+            uniq_lits.add(abs(l))
+        result.add(tuple(clause))
+    return result, len(uniq_lits)
+
+
+import random
+
+import networkx as nx
+from networkx import random_regular_graph, double_edge_swap, gnp_random_graph, random_k_out_graph
+from networkx.utils import py_random_state
+
+
+@py_random_state(3)
+def directed_edge_swap(G, *, nswap=1, max_tries=100, seed=None):
+    """Swap three edges in a directed graph while keeping the node degrees fixed.
+    A directed edge swap swaps three edges such that a -> b -> c -> d becomes
+    a -> c -> b -> d. This pattern of swapping allows all possible states with the
+    same in- and out-degree distribution in a directed graph to be reached.
+    If the swap would create parallel edges (e.g. if a -> c already existed in the
+    previous example), another attempt is made to find a suitable trio of edges.
+    Parameters
+    ----------
+    G : DiGraph
+       A directed graph
+    nswap : integer (optional, default=1)
+       Number of three-edge (directed) swaps to perform
+    max_tries : integer (optional, default=100)
+       Maximum number of attempts to swap edges
+    seed : integer, random_state, or None (default)
+        Indicator of random number generation state.
+        See :ref:`Randomness<randomness>`.
+    Returns
+    -------
+    G : DiGraph
+       The graph after the edges are swapped.
+    Raises
+    ------
+    NetworkXError
+        If `G` is not directed, or
+        If nswap > max_tries, or
+        If there are fewer than 4 nodes in `G`
+    NetworkXAlgorithmError
+        If the number of swap attempts exceeds `max_tries` before `nswap` swaps are made
+    Notes
+    -----
+    Does not enforce any connectivity constraints.
+    The graph G is modified in place.
+    References
+    ----------
+    .. [1] Erdős, Péter L., et al. “A Simple Havel-Hakimi Type Algorithm to Realize
+           Graphical Degree Sequences of Directed Graphs.” ArXiv:0905.4913 [Math],
+           Jan. 2010. https://doi.org/10.48550/arXiv.0905.4913.
+           Published  2010 in Elec. J. Combinatorics (17(1)). R66.
+           http://www.combinatorics.org/Volume_17/PDF/v17i1r66.pdf
+    .. [2] “Combinatorics - Reaching All Possible Simple Directed Graphs with a given
+           Degree Sequence with 2-Edge Swaps.” Mathematics Stack Exchange,
+           https://math.stackexchange.com/questions/22272/. Accessed 30 May 2022.
+    """
+    if nswap > max_tries:
+        raise nx.NetworkXError("Number of swaps > number of tries allowed.")
+    if len(G) < 4:
+        raise nx.NetworkXError("Graph has less than four nodes.")
+
+    # Instead of choosing uniformly at random from a generated edge list,
+    # this algorithm chooses nonuniformly from the set of nodes with
+    # probability weighted by degree.
+    tries = 0
+    swapcount = 0
+    keys, degrees = zip(*G.degree())  # keys, degree
+    cdf = nx.utils.cumulative_distribution(degrees)  # cdf of degree
+    discrete_sequence = nx.utils.discrete_sequence
+
+    while swapcount < nswap:
+        # choose source node index from discrete distribution
+        start_index = discrete_sequence(1, cdistribution=cdf, seed=seed)[0]
+        start = keys[start_index]
+        tries += 1
+
+        if tries > max_tries:
+            msg = f"Maximum number of swap attempts ({tries}) exceeded before desired swaps achieved ({nswap})."
+            raise nx.NetworkXAlgorithmError(msg)
+
+        # If the given node doesn't have any out edges, then there isn't anything to swap
+        if G.out_degree(start) == 0:
+            continue
+        second = seed.choice(list(G.succ[start]))
+        if start == second:
+            continue
+
+        if G.out_degree(second) == 0:
+            continue
+        third = seed.choice(list(G.succ[second]))
+        if second == third:
+            continue
+
+        if G.out_degree(third) == 0:
+            continue
+        fourth = seed.choice(list(G.succ[third]))
+        if third == fourth:
+            continue
+
+        if (
+                third not in G.succ[start]
+                and fourth not in G.succ[second]
+                and second not in G.succ[third]
+        ):
+            # Swap nodes
+            G.add_edge(start, third)
+            G.add_edge(third, second)
+            G.add_edge(second, fourth)
+            G.remove_edge(start, second)
+            G.remove_edge(second, third)
+            G.remove_edge(third, fourth)
+            swapcount += 1
+
+    return G
+
+
+def generate_problem(degree, size, isomorphic, directed=True):
+    A = random_regular_graph(degree, size)
+    # A = random_k_out_graph(size, 3 , 0.6)
+    node_mapping = dict(zip(A.nodes(), sorted(A.nodes(), key=lambda k: random.random())))
+    B = nx.relabel_nodes(A, node_mapping)
+
+    A.remove_nodes_from(list(nx.isolates(A)))
+    B.remove_nodes_from(list(nx.isolates(B)))
+
+    if not isomorphic:
+        B = double_edge_swap(B)
+        # B = directed_edge_swap(B)
+    if isomorphic != nx.is_isomorphic(A, B):
+        return generate_problem(degree, size, isomorphic)
+
+    return A, B, node_mapping
