@@ -1,5 +1,6 @@
 import difflib
 import itertools
+import random
 import warnings
 import leidenalg
 
@@ -14,7 +15,6 @@ import networkx as nx
 
 from collections import OrderedDict, Counter
 
-TIME = 0
 
 def queyranne(F, V):
     def Fnew(a):
@@ -35,8 +35,6 @@ def queyranne(F, V):
     for h in range(n):
         # Find a pendant pair
         [t, u] = pendentpair(Fnew, inew)
-        if t is None and u is None:
-            return True
         # This gives a candidate solution
         A.append(S[u - 1].copy())
         isu = Fnew({u})
@@ -50,7 +48,8 @@ def queyranne(F, V):
         del inew[u]
         for x in range(len(S[u - 1])):
             S[u - 1][x] *= -1
-    return False
+    vals = dict(zip([tuple(a) for a in A], s))
+    return Counter.most_common(vals)
 
 
 # Implements the pendant pair finding subroutine of Queyranne's algorithm
@@ -95,72 +94,47 @@ def pendentpair(F, V):
 
 
 def f_wrapper(G, result, keep, formula, N):
-
     vnodes = {}
     for v in G.vs.indices:
         vnodes[int(G.vs[v]["_nx_name"])] = v
 
-    clauses = []
-    for c in list(zip(*[iter(range(0, 3 * len(formula)))] * 3)):
-        clauses.append([vnodes[i] for i in c])
+    var_map = list(set(keep.values()))
 
-    iters = 2
-    reso = 1
-    objf = "modularity"
+    kres = {i: [j[0] for j in j] for i, j in
+            itertools.groupby(sorted(keep.items(), key=lambda x: x[1]), lambda x: x[1])}
+
+    iters = 1
+    reso = 0
+    objf = "CPM"
 
     bv = abs(ig.community._community_leiden(G, objective_function=objf, n_iterations=iters,
-                                            resolution=reso).modularity * len(formula))
-    def chkp(r):
-        x = [keep[int(r.vs[i]["_nx_name"])] for i in r.vs.indices]
-        if len(set(x)) >= N:
-            res = set()
-            for v, _ in Counter(x).most_common():
-                if v * -1 not in res:
-                    res.add(v)
-            if len(res) == N and checksat(formula, set(res)):
-                return True
-
-            res = set()
-            for v, _ in reversed(Counter(x).most_common()):
-                if v * -1 not in res:
-                    res.add(v)
-            if len(res) == N and checksat(formula, set(res)):
-                return True
-
-        return False
+                                            resolution=reso).modularity * len(var_map))
 
     def f(s):
 
         s = tuple(sorted(s))
-        s1 = tuple(set(range(0, len(formula))) - set(s))
+        s1 = tuple(sorted((set(range(0, len(var_map))) - set(s))))
 
         if s in result or s1 in result:
             return bv - result[s] + result[s1]
-        else:
-            global TIME
-            TIME += 1
 
         gn = list()
+
         for e in s1:
-            for l in clauses[e]:
-                gn.append(l)
+            gn += [vnodes[kq] for kq in kres[var_map[e]]]
 
         g = G.subgraph(gn)
 
         hn = list()
         for e in s:
-            for l in clauses[e]:
-                hn.append(l)
+            hn = hn + [vnodes[kq] for kq in kres[var_map[e]]]
 
         h = G.subgraph(hn)
 
-        gvc, gec, hvc, hec = g.vcount() ,g.ecount(), h.vcount(), h.ecount()
+        gvc, gec, hvc, hec = g.vcount(), g.ecount(), h.vcount(), h.ecount()
 
         if gvc < 1 or gec < 1 or hvc < 1 or hec < 1:
             return 0
-
-        if (gvc >= N and chkp(g)) or (hvc >= N and chkp(h)):
-            return -464647101
 
         result[s1] = abs(ig.community._community_leiden(
             g,
@@ -181,34 +155,32 @@ def f_wrapper(G, result, keep, formula, N):
     return f
 
 
-def solve(g, keep, f, N):
+def solve(G, keep, f, N):
     result = {}
-
-    G = ig.Graph.from_networkx(g)
-    q = queyranne(f_wrapper(G, result, keep, f, N), list(range(0, len(f))))
-    return q == True
+    q = queyranne(f_wrapper(G, result, keep, f, N), list(range(0, N * 2)))
+    return q
 
 
 def here(g, keep, f, N):
-    return solve(g, keep, f, N)
+
+    G = ig.Graph.from_networkx(g)
+
+    var_map = list(set(keep.values()))
+    s = solve(G, keep, f, N)[0][0][0]
+    return var_map[s]
 
 
 if __name__ == '__main__':
-    N = 10
+    N = 50
     M = 3
 
     yes = 0
-    TM = set()
-    for ui in range(0, 1000):
-        #f = list(gen_unsat(N, int(N * M)))
-        f = gen_sat(N, int(N * M), random_cnf(N))
+
+    for ui in range(0, 1):
+        # f = list(gen_unsat(N, int(N * M)))
+        f = list(gen_sat(N, int(N * M), random_cnf(N)))
+        t = 0
         g, k = sat_to_clique(f)
-        p = 0
-        yes += here(g, k, f, N)
-        TM.add(TIME)
-        TIME = 0
+        yes += asol(f, asum=[here(g, k, f, N)]) != []
 
     print(yes)
-    print(min(TM), max(TM))
-
-    # 2 3098
