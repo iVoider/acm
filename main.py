@@ -14,6 +14,7 @@ import networkx as nx
 
 from collections import OrderedDict, Counter
 
+TIME = 0
 
 def queyranne(F, V):
     def Fnew(a):
@@ -30,14 +31,18 @@ def queyranne(F, V):
     for x in range(1, n + 1):
         inew[x] = x
     minimum = float("inf")
-    position_of_min = 0
 
     for h in range(n):
         # Find a pendant pair
         [t, u] = pendentpair(Fnew, inew)
+        if t is None and u is None:
+            return True
         # This gives a candidate solution
         A.append(S[u - 1].copy())
-        s.append(Fnew({u}))
+        isu = Fnew({u})
+        if isu == -464647101:
+            return True
+        s.append(isu)
         if s[-1] < minimum:
             minimum = s[-1]
             position_of_min = len(s) - 1
@@ -45,8 +50,7 @@ def queyranne(F, V):
         del inew[u]
         for x in range(len(S[u - 1])):
             S[u - 1][x] *= -1
-    vals = dict(zip([tuple(a) for a in A], s))
-    return Counter.most_common(vals)
+    return False
 
 
 # Implements the pendant pair finding subroutine of Queyranne's algorithm
@@ -72,7 +76,12 @@ def pendentpair(F, V):
             if used[counter]:
                 continue
             Wi += [V[j]]
-            keys[counter] = F(Wi) - F({V[j]})
+
+            ax = F(Wi)
+            bx = F({V[j]})
+            if ax == -464647101 or bx == -464647101:
+                return [None, None]
+            keys[counter] = ax - bx
             del Wi[-1]
             if keys[counter] < minimum:
                 minimum = keys[counter]
@@ -85,7 +94,7 @@ def pendentpair(F, V):
     return [vold, vnew]
 
 
-def f_wrapper(G, result):
+def f_wrapper(G, result, keep, formula, N):
     nodes_set = set(G.vs.indices)
 
     iters = 1
@@ -94,6 +103,24 @@ def f_wrapper(G, result):
 
     bv = abs(ig.community._community_leiden(G, objective_function=objf, n_iterations=iters,
                                             resolution=reso).modularity * len(nodes_set))
+    def chkp(r):
+        x = [keep[int(r.vs[i]["_nx_name"])] for i in r.vs.indices]
+        if len(set(x)) >= N:
+            res = set()
+            for v, _ in Counter(x).most_common():
+                if v * -1 not in res:
+                    res.add(v)
+            if len(res) == N and checksat(formula, set(res)):
+                return True
+
+            res = set()
+            for v, _ in reversed(Counter(x).most_common()):
+                if v * -1 not in res:
+                    res.add(v)
+            if len(res) == N and checksat(formula, set(res)):
+                return True
+
+        return False
 
     def f(s):
 
@@ -102,12 +129,20 @@ def f_wrapper(G, result):
 
         if s in result or s1 in result:
             return bv - result[s] + result[s1]
+        else:
+            global TIME
+            TIME += 1
 
         g = G.subgraph(s1)
         h = G.subgraph(s)
 
-        if g.vcount() < 1 or g.ecount() < 1 or h.vcount() < 1 or h.ecount() < 1:
+        gvc, gec, hvc, hec = g.vcount() ,g.ecount(), h.vcount(), h.ecount()
+
+        if gvc < 1 or gec < 1 or hvc < 1 or hec < 1:
             return 0
+
+        if (gvc >= N and chkp(g)) or (hvc >= N and chkp(h)):
+            return -464647101
 
         result[s1] = abs(ig.community._community_leiden(
             g,
@@ -128,23 +163,16 @@ def f_wrapper(G, result):
     return f
 
 
-def solve(g, keep):
+def solve(g, keep, f, N):
     result = {}
 
     G = ig.Graph.from_networkx(g)
-    q = queyranne(f_wrapper(G, result), list(range(0, g.number_of_nodes())))
-    ret = {}
-    for key, value in result.items():
-        to = [keep[int(G.vs[i]["_nx_name"])] for i in key]
-        ret[tuple(to)] = value
-
-    return ret
+    q = queyranne(f_wrapper(G, result, keep, f, N), list(range(0, g.number_of_nodes())))
+    return q == True
 
 
-def here(g, keep):
-    k = solve(g, keep)
-
-    return Counter.most_common(k)
+def here(g, keep, f, N):
+    return solve(g, keep, f, N)
 
 
 def sat_to_clique(formula):
@@ -177,30 +205,21 @@ def checksat(f, ass):
 
 
 if __name__ == '__main__':
-    N = 4
+    N = 9
     M = 3
 
     yes = 0
-    mx = set()
-    for ui in range(0, 100):
-        # f = list(gen_unsat(N, int(N * M)))
+    TM = set()
+    for ui in range(0, 1):
+        #f = list(gen_unsat(N, int(N * M)))
         f = gen_sat(N, int(N * M), random_cnf(N))
         g, k = sat_to_clique(f)
         p = 0
-        ans = here(g, k)
-        mx.add(len(ans))
-        for j, v in ans:
-            p += 1
-            if len(set(j)) >= N:
-                res = set()
-                for v, _ in reversed(Counter(j).most_common()):
-                    if v * -1 not in res:
-                        res.add(v)
-                if len(res) == N and checksat(f, set(res)):
-                    yes += 1
-                    break
+        yes += here(g, k, f, N)
+        TM.add(TIME)
+        TIME = 0
 
     print(yes)
-    print(min(mx), max(mx))
+    print(min(TM), max(TM))
 
-    #         if Counter([int(g.vs[i]["_nx_name"]) for i in s1]).most_common():
+    # 2 3098
