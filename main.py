@@ -1,13 +1,9 @@
 import difflib
 import itertools
 import warnings
-import time
-
 import leidenalg
 
 import numpy as np
-import scipy.stats
-from scipy.stats import mannwhitneyu, ttest_ind, zscore
 
 from sat import gen_unsat, gen_sat, random_cnf, sat, solution, asol, mincore
 
@@ -18,20 +14,123 @@ import networkx as nx
 
 from collections import OrderedDict, Counter
 
-def here(g, size):
+
+def queyranne(F, V):
+    def Fnew(a):
+        r = []
+        for x in a:
+            r += S[x - 1]
+        return F(r)
+
+    n = len(V)
+    S = [[x] for x in V]
+    s = []
+    A = []
+    inew = OrderedDict()
+    for x in range(1, n + 1):
+        inew[x] = x
+    minimum = float("inf")
+    position_of_min = 0
+
+    for h in range(n):
+        # Find a pendant pair
+        [t, u] = pendentpair(Fnew, inew)
+        # This gives a candidate solution
+        A.append(S[u - 1].copy())
+        s.append(Fnew({u}))
+        if s[-1] < minimum:
+            minimum = s[-1]
+            position_of_min = len(s) - 1
+        S[t - 1] += S[u - 1]
+        del inew[u]
+        for x in range(len(S[u - 1])):
+            S[u - 1][x] *= -1
+    vals = dict(zip([tuple(a) for a in A], s))
+    return Counter.most_common(vals)
+
+
+# Implements the pendant pair finding subroutine of Queyranne's algorithm
+# (Queyranne '95)
+# F is the submodular function
+# inds is an array of indices; (typically, 1:n)
+
+def pendentpair(F, V):
+    vstart = V.popitem(last=False)[0]
+    vnew = vstart
+    n = len(V)
+    Wi = []
+    used = [0] * n
+    for i in range(n + 1):
+        vold = vnew
+        Wi += [vold]
+        # Now update the keys
+        keys = [1e99] * n
+        minimum = float("inf")
+        counter = -1
+        for j in V:
+            counter += 1
+            if used[counter]:
+                continue
+            Wi += [V[j]]
+            keys[counter] = F(Wi) - F({V[j]})
+            del Wi[-1]
+            if keys[counter] < minimum:
+                minimum = keys[counter]
+                argmin_key = j
+                argmin_position = counter
+            vnew = argmin_key
+            used[argmin_position] = 1
+    V[vstart] = vstart
+    V.move_to_end(vstart, last=False)
+    return [vold, vnew]
+
+
+def f_wrapper(G, result, cpm=True):
+    nodes_set = set(G.vs.indices)
+
+    bv = ig.community._community_leiden(G, objective_function="modularity", n_iterations=2, resolution=0.1).modularity
+
+    def f(s):
+
+        s = tuple(sorted(s))
+
+        if s in result:
+            return result[s]
+
+        g = G.subgraph(nodes_set - set(s))
+        h = G.subgraph(set(s))
+
+        if g.vcount() < 1 or g.ecount() < 1 or h.vcount() < 1 or h.ecount() < 1:
+            return 0
+
+        # for other types (like directed), use:
+        partition = bv - ((ig.community._community_leiden(g, objective_function="modularity", n_iterations=2, resolution=0.1).modularity
+                     + ig.community._community_leiden(h, objective_function="modularity",n_iterations=2, resolution=0.1).modularity) / 2)
+
+        result[s] = partition
+        return partition
+
+    return f
+
+
+def solve(g, keep, cpm=True):
+    result = {}
+
     G = ig.Graph.from_networkx(g)
-    candidates = {}
+    q = queyranne(f_wrapper(G, result, cpm), list(range(0, g.number_of_nodes())))
+    ret = {}
+    for key, value in result.items():
 
-    for v in G.vs.indices:
-        H = G.copy()
-        H.delete_vertices(v)
-        candidates[v] = ig.community._community_leiden(H, objective_function="CPM", n_iterations=0).modularity / len(G.neighbors(v))
+        to = [keep[int(G.vs[i]["_nx_name"])] for i in key]
+        ret[tuple(to)] = value
+    return ret
 
-    G.delete_vertices(min(candidates, key=candidates.get))
 
-    return G.clique_number() >= size
+def here(g, keep, cpm=True):
+    k = solve(g, keep, cpm)
 
-# check remove edge between two smallest nodes values
+    return Counter.most_common(k)
+
 
 def sat_to_clique(formula):
     g = nx.Graph()
@@ -57,17 +156,23 @@ def sat_to_clique(formula):
 
 if __name__ == '__main__':
     N = 4
-    size = 13
-
-    start = time.time()
+    M = 3
 
     yes = 0
-    for ui in range(0, 100000):
-        f = gen_sat(N, size, random_cnf(N))
-        # f = gen_unsat(N,size)
+    for ui in range(0, 100):
+        #f = list(gen_unsat(N, int(N * M)))
+        f = gen_sat(N, int(N * M), random_cnf(N))
         g, k = sat_to_clique(f)
-        yes += here(g, size)
+        for j, v in here(g, k, True):
+         if len(set(j)) >= N:
+          res = set()
+          for v, _ in Counter(j).most_common():
+            if v * -1 not in res:
+                res.add(v)
+          qubei = asol(f, asum=list(res))
+          if len(res) == N and len(qubei) > 0:
+            yes += 1
+            break
 
     print(yes)
-    end = time.time()
-    print(end - start)
+
