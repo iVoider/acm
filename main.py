@@ -95,14 +95,21 @@ def pendentpair(F, V):
 
 
 def f_wrapper(G, result, keep, formula, N):
-    nodes_set = set(G.vs.indices)
 
-    iters = 1
-    reso = 0
-    objf = "CPM"
+    vnodes = {}
+    for v in G.vs.indices:
+        vnodes[int(G.vs[v]["_nx_name"])] = v
+
+    clauses = []
+    for c in list(zip(*[iter(range(0, 3 * len(formula)))] * 3)):
+        clauses.append([vnodes[i] for i in c])
+
+    iters = 2
+    reso = 1
+    objf = "modularity"
 
     bv = abs(ig.community._community_leiden(G, objective_function=objf, n_iterations=iters,
-                                            resolution=reso).modularity * len(nodes_set))
+                                            resolution=reso).modularity * len(formula))
     def chkp(r):
         x = [keep[int(r.vs[i]["_nx_name"])] for i in r.vs.indices]
         if len(set(x)) >= N:
@@ -125,7 +132,7 @@ def f_wrapper(G, result, keep, formula, N):
     def f(s):
 
         s = tuple(sorted(s))
-        s1 = tuple(nodes_set - set(s))
+        s1 = tuple(set(range(0, len(formula))) - set(s))
 
         if s in result or s1 in result:
             return bv - result[s] + result[s1]
@@ -133,8 +140,19 @@ def f_wrapper(G, result, keep, formula, N):
             global TIME
             TIME += 1
 
-        g = G.subgraph(s1)
-        h = G.subgraph(s)
+        gn = list()
+        for e in s1:
+            for l in clauses[e]:
+                gn.append(l)
+
+        g = G.subgraph(gn)
+
+        hn = list()
+        for e in s:
+            for l in clauses[e]:
+                hn.append(l)
+
+        h = G.subgraph(hn)
 
         gvc, gec, hvc, hec = g.vcount() ,g.ecount(), h.vcount(), h.ecount()
 
@@ -148,13 +166,13 @@ def f_wrapper(G, result, keep, formula, N):
             g,
             objective_function=objf,
             n_iterations=iters,
-            resolution=reso).modularity * g.vcount())
+            resolution=reso).modularity * len(s1))
 
         result[s] = abs(ig.community._community_leiden(
             h,
             objective_function=objf,
             n_iterations=iters,
-            resolution=reso).modularity * h.vcount())
+            resolution=reso).modularity * len(s))
 
         partition = bv - result[s1] + result[s]
         result[s] = partition
@@ -167,7 +185,7 @@ def solve(g, keep, f, N):
     result = {}
 
     G = ig.Graph.from_networkx(g)
-    q = queyranne(f_wrapper(G, result, keep, f, N), list(range(0, g.number_of_nodes())))
+    q = queyranne(f_wrapper(G, result, keep, f, N), list(range(0, len(f))))
     return q == True
 
 
@@ -181,7 +199,7 @@ if __name__ == '__main__':
 
     yes = 0
     TM = set()
-    for ui in range(0, 10):
+    for ui in range(0, 1000):
         #f = list(gen_unsat(N, int(N * M)))
         f = gen_sat(N, int(N * M), random_cnf(N))
         g, k = sat_to_clique(f)
