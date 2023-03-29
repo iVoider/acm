@@ -205,7 +205,7 @@ def checksat(f, ass):
 
 
 if __name__ == '__main__':
-    N = 9
+    N = 20
     M = 3
 
     yes = 0
