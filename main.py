@@ -101,20 +101,26 @@ def f_wrapper(G, result, vals):
         if s in result:
             return result[s]
 
-        g = G.subgraph(nodes_set - set(s))
+        es = set()
+        for e in s:
+            es.add(G.es[e].source)
+            es.add(G.es[e].target)
 
-        if g.vcount() < 1 or g.ecount() < 1:
+        gH = G.subgraph(nodes_set - set(es))
+
+        if gH.vcount() < 1 or gH.ecount() < 1:
             return 0
         # for other types (like directed), use:
         partition = 0
 
-        for ve in g.vs:
-            partition += vals[int(ve["_nx_name"])]
+        for ve in gH.es:
+            partition += vals[frozenset({gH.vs[ve.source]["_nx_name"], gH.vs[ve.target]["_nx_name"]})]
 
         result[s] = partition
         return partition
 
     return f
+
 
 def here(g, size, keep):
     G = ig.Graph.from_networkx(g)
@@ -122,23 +128,29 @@ def here(g, size, keep):
     vals = {}
     vals_c = {}
 
-    for v in G.vs:
+    for e in G.es:
         H = G.copy()
-        H.delete_vertices(v)
-        vals[int(v["_nx_name"])] = ig.Graph.community_leiden(H, objective_function="CPM").modularity
-        vals_c[int(v["_nx_name"])] = ig.Graph.community_leiden(H, objective_function="modularity").modularity
-
-
-
-    result = {}
-
-    q = queyranne(f_wrapper(G, result, vals), list(range(0, g.number_of_nodes())))
+        mapping = H.vs.indices
+        mapping[e.source] = mapping[e.target]
+        H.contract_vertices(mapping)
+        e["name"] = frozenset({G.vs[e.source]["_nx_name"], G.vs[e.target]["_nx_name"]})
+        vals[(e["name"])] = ig.Graph.community_leiden(H, objective_function="CPM").modularity
+        vals_c[(e["name"])] = ig.Graph.community_leiden(H, objective_function="modularity").modularity
 
     result = {}
 
-    q1 = queyranne(f_wrapper(G, result, vals_c), list(range(0, g.number_of_nodes())))
+    q = queyranne(f_wrapper(G, result, vals), list(range(0, g.number_of_edges())))
 
-    return keep[int(G.vs[q[0][0][0]]["_nx_name"])], keep[int(G.vs[q1[0][0][0]]["_nx_name"])], keep[int(G.vs[q[-1][0][0]]["_nx_name"])],  keep[int(G.vs[q1[-1][0][0]]["_nx_name"])]
+    result = {}
+
+    q1 = queyranne(f_wrapper(G, result, vals_c), list(range(0, g.number_of_edges())))
+
+    return (keep[G.vs[G.es[q[0][0][0]].source]["_nx_name"]],
+            keep[G.vs[G.es[q[0][0][0]].target]["_nx_name"]]), (keep[G.vs[G.es[q1[0][0][0]].source]["_nx_name"]],
+            keep[G.vs[G.es[q1[0][0][0]].target]["_nx_name"]]), (keep[G.vs[G.es[q[-1][0][0]].source]["_nx_name"]],
+            keep[G.vs[G.es[q[-1][0][0]].target]["_nx_name"]]), (keep[G.vs[G.es[q1[-1][0][0]].source]["_nx_name"]],
+            keep[G.vs[G.es[q1[-1][0][0]].target]["_nx_name"]])
+
 
 # check remove edge between two smallest nodes values
 
@@ -170,18 +182,15 @@ if __name__ == '__main__':
 
     yes = [0] * 4
 
-
     for ui in range(0, 100):
         f = gen_sat(N, size, random_cnf(N))
-        #f = gen_unsat(N,size)
+        # f = gen_unsat(N,size)
         g, k = sat_to_clique(f)
-        a,b,c,d = here(g, size, k)
+        a, b, c, d = here(g, size, k)
 
-        yes[0] += asol(f, asum=[a]) != []
-        yes[1] += asol(f, asum=[b]) != []
-        yes[2] += asol(f, asum=[c]) != []
-        yes[3] += asol(f, asum=[d]) != []
-
-
+        yes[0] += asol(f, asum=a) != []
+        yes[1] += asol(f, asum=b) != []
+        yes[2] += asol(f, asum=c) != []
+        yes[3] += asol(f, asum=d) != []
 
     print(yes)
