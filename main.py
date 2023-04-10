@@ -1,6 +1,5 @@
 import difflib
 import itertools
-import random
 import warnings
 import time
 
@@ -8,7 +7,6 @@ import leidenalg
 
 import numpy as np
 import scipy.stats
-from networkx import double_edge_swap
 from scipy.stats import mannwhitneyu, ttest_ind, zscore
 
 from sat import gen_unsat, gen_sat, random_cnf, sat, solution, asol, mincore
@@ -21,135 +19,40 @@ import networkx as nx
 from collections import OrderedDict, Counter
 
 
-def queyranne(F, V):
-    def Fnew(a):
-        r = []
-        for x in a:
-            r += S[x - 1]
-        return F(r)
+def here(G):
+    candidates = {}
 
-    n = len(V)
-    S = [[x] for x in V]
-    s = []
-    A = []
-    inew = OrderedDict()
-    for x in range(1, n + 1):
-        inew[x] = x
-    minimum = float("inf")
-    position_of_min = 0
+    for v in G.vs.indices:
+        H = G.copy()
+        H.delete_vertices(v)
+        vcc = ig.VertexClustering(H, H.vs.indices)
+        candidates[v] = vcc.modularity
 
-    for h in range(n):
-        # Find a pendant pair
-        [t, u] = pendentpair(Fnew, inew)
-        # This gives a candidate solution
-        A.append(S[u - 1].copy())
-        s.append(Fnew({u}))
-        if s[-1] < minimum:
-            minimum = s[-1]
-            position_of_min = len(s) - 1
-        S[t - 1] += S[u - 1]
-        del inew[u]
-        for x in range(len(S[u - 1])):
-            S[u - 1][x] *= -1
-    vals = dict(zip([tuple(a) for a in A], s))
-    return Counter.most_common(vals)
+    consider = {}
 
+    for e in G.vs[min(candidates, key=candidates.get)].incident():
+        H = G.copy()
+        H.delete_edges(e)
+        vcc = ig.VertexClustering(H, H.vs.indices)
+        a = vcc.modularity
 
-# Implements the pendant pair finding subroutine of Queyranne's algorithm
-# (Queyranne '95)
-# F is the submodular function
-# inds is an array of indices; (typically, 1:n)
+        H = G.copy()
+        H.delete_vertices([e.source, e.target])
+        vcc = ig.VertexClustering(H, H.vs.indices)
+        b = vcc.modularity
 
-def pendentpair(F, V):
-    vstart = V.popitem(last=False)[0]
-    vnew = vstart
-    n = len(V)
-    Wi = []
-    used = [0] * n
-    for i in range(n + 1):
-        vold = vnew
-        Wi += [vold]
-        # Now update the keys
-        keys = [1e99] * n
-        minimum = float("inf")
-        counter = -1
-        for j in V:
-            counter += 1
-            if used[counter]:
-                continue
-            Wi += [V[j]]
-            keys[counter] = F(Wi) - F({V[j]})
-            del Wi[-1]
-            if keys[counter] < minimum:
-                minimum = keys[counter]
-                argmin_key = j
-                argmin_position = counter
-            vnew = argmin_key
-            used[argmin_position] = 1
-    V[vstart] = vstart
-    V.move_to_end(vstart, last=False)
-    return [vold, vnew]
-
-
-def f_wrapper(G, result, vals):
-    nodes_set = set(G.vs.indices)
-
-    def f(s):
-
-        s = tuple(sorted(s))
-
-        if s in result:
-            return result[s]
-
-        es = set()
-        for e in s:
-            es.add(G.es[e].source)
-            es.add(G.es[e].target)
-
-        gH = G.subgraph(nodes_set - set(es))
-
-        if gH.vcount() < 1 or gH.ecount() < 1:
-            return 0
-        # for other types (like directed), use:
-        partition = 0
-
-        for ve in gH.es:
-            partition += vals[frozenset({gH.vs[ve.source]["_nx_name"], gH.vs[ve.target]["_nx_name"]})]
-
-        result[s] = partition
-        return partition
-
-    return f
-
-
-def here(g, size, keep):
-    G = ig.Graph.from_networkx(g)
-
-    vals = {}
-    vals_c = {}
-
-    for e in G.es:
         H = G.copy()
         mapping = H.vs.indices
-        mapping[e.source] = mapping[e.target]
+        mapping[e.source] = e.target
         H.contract_vertices(mapping)
-        e["name"] = frozenset({G.vs[e.source]["_nx_name"], G.vs[e.target]["_nx_name"]})
-        vals[(e["name"])] = ig.Graph.community_leiden(H, objective_function="CPM").modularity
-        vals_c[(e["name"])] = ig.Graph.community_leiden(H, objective_function="modularity").modularity
+        vcc = ig.VertexClustering(H, H.vs.indices)
+        cs = vcc.modularity
 
-    result = {}
+        consider[e.index] = (a, b, cs)
 
-    q = queyranne(f_wrapper(G, result, vals), list(range(0, g.number_of_edges())))
+    G.delete_edges(min(consider, key=consider.get))
 
-    result = {}
-
-    q1 = queyranne(f_wrapper(G, result, vals_c), list(range(0, g.number_of_edges())))
-
-    return (keep[G.vs[G.es[q[0][0][0]].source]["_nx_name"]],
-            keep[G.vs[G.es[q[0][0][0]].target]["_nx_name"]]), (keep[G.vs[G.es[q1[0][0][0]].source]["_nx_name"]],
-            keep[G.vs[G.es[q1[0][0][0]].target]["_nx_name"]]), (keep[G.vs[G.es[q[-1][0][0]].source]["_nx_name"]],
-            keep[G.vs[G.es[q[-1][0][0]].target]["_nx_name"]]), (keep[G.vs[G.es[q1[-1][0][0]].source]["_nx_name"]],
-            keep[G.vs[G.es[q1[-1][0][0]].target]["_nx_name"]])
+    return G
 
 
 # check remove edge between two smallest nodes values
@@ -177,20 +80,25 @@ def sat_to_clique(formula):
 
 
 if __name__ == '__main__':
-    N = 4
-    size = 12
+    N = 6
+    size = 18
 
-    yes = [0] * 4
+    start = time.time()
 
-    for ui in range(0, 100):
+    yes = 0
+    for ui in range(0, 1):
         f = gen_sat(N, size, random_cnf(N))
         # f = gen_unsat(N,size)
         g, k = sat_to_clique(f)
-        a, b, c, d = here(g, size, k)
-
-        yes[0] += asol(f, asum=a) != []
-        yes[1] += asol(f, asum=b) != []
-        yes[2] += asol(f, asum=c) != []
-        yes[3] += asol(f, asum=d) != []
-
-    print(yes)
+        G = ig.Graph.from_networkx(g)
+        i = 0
+        print(G.ecount(), G.vcount())
+        while True:
+            G = here(G)
+            G.vs.select(_degree=0).delete()
+            G.vs.select(_degree=size - 2).delete()
+            if G.clique_number() < size:
+                print(G.ecount(), G.vcount())
+                break
+            i += 1
+        print(i)
