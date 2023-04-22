@@ -15,107 +15,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 import igraph as ig
 import networkx as nx
 
-from collections import OrderedDict, Counter
-
-
-def queyranne(F, V):
-    def Fnew(a):
-        r = []
-        for x in a:
-            r += S[x - 1]
-        return F(r)
-
-    n = len(V)
-    S = [[x] for x in V]
-    s = []
-    A = []
-    inew = OrderedDict()
-    for x in range(1, n + 1):
-        inew[x] = x
-    minimum = float("inf")
-    position_of_min = 0
-
-    for h in range(n):
-        # Find a pendant pair
-        [t, u] = pendentpair(Fnew, inew)
-        # This gives a candidate solution
-        A.append(S[u - 1].copy())
-        s.append(Fnew({u}))
-        if s[-1] < minimum:
-            minimum = s[-1]
-            position_of_min = len(s) - 1
-        S[t - 1] += S[u - 1]
-        del inew[u]
-        for x in range(len(S[u - 1])):
-            S[u - 1][x] *= -1
-    vals = dict(zip([tuple(a) for a in A], s))
-    return Counter.most_common(vals)
-
-
-# Implements the pendant pair finding subroutine of Queyranne's algorithm
-# (Queyranne '95)
-# F is the submodular function
-# inds is an array of indices; (typically, 1:n)
-
-def pendentpair(F, V):
-    vstart = V.popitem(last=False)[0]
-    vnew = vstart
-    n = len(V)
-    Wi = []
-    used = [0] * n
-    for i in range(n + 1):
-        vold = vnew
-        Wi += [vold]
-        # Now update the keys
-        keys = [1e99] * n
-        minimum = float("inf")
-        counter = -1
-        for j in V:
-            counter += 1
-            if used[counter]:
-                continue
-            Wi += [V[j]]
-            keys[counter] = F(Wi) - F({V[j]})
-            del Wi[-1]
-            if keys[counter] < minimum:
-                minimum = keys[counter]
-                argmin_key = j
-                argmin_position = counter
-            vnew = argmin_key
-            used[argmin_position] = 1
-    V[vstart] = vstart
-    V.move_to_end(vstart, last=False)
-    return [vold, vnew]
-
-
-def f_wrapper(G, size, result):
-    def f(V, s, params=None):
-
-        if type(s) == int:
-            s = [list(G.vs.indices)[s]]
-        else:
-            s = list(itertools.chain(*(i if isinstance(i, list) else (i,) for i in s)))
-            s = [list(G.vs.indices)[n] for n in s]
-
-        s = tuple(sorted(s))
-
-        if s in result:
-            return result[s]
-
-        vex = [0] * (size * 3)
-
-        for i in s:
-            vex[i] = 1
-
-        result[s] = 1.0 - ig.VertexClustering(G, membership=vex).modularity
-        return result[s]
-
-    return f
-
-
-def solve(G, size, g):
-    result = {}
-    return QUEYRANNE(nx.adjacency_matrix(g).toarray(), f_wrapper(G, size, result))
+from collections import  Counter
 
 
 def sat_to_clique(formula):
@@ -140,29 +40,69 @@ def sat_to_clique(formula):
     return g, mapping
 
 
+def multipass(m_g):
+    r = list()
+    m_g = m_g.linegraph()
+    for v in m_g.vs.indices:
+        K = m_g.copy()
+        sl = K.vcount()
+        nxt = list()
+        while True:
+            map_ping = K.vs.indices
+            nb = K.vs[v].neighbors()
+            for n in nb:
+                map_ping[n.index] = v
+            K.contract_vertices(map_ping)
+            map_ping = [0] * K.vcount()
+            map_ping[v] = 1
+            nxt.append(ig.VertexClustering(K, map_ping).modularity * len(nb))
+            l = len(K.vs[v].neighbors())
+            if l > sl or l < 2:
+                break
+            break
+
+        r.append(tuple(nxt))
+    return sorted(r)
+
+
 if __name__ == '__main__':
-    N = 6
-    M = 3
+    N = 4
+    M = 7
+
+    mx = set()
 
     yes = 0
+    no = 0
 
-    for ui in range(0, 100):
+    for ui in range(0, 1):
         #f = gen_unsat(N, N * M)
         f = gen_sat(N, N * M, random_cnf(N))
         g, k = sat_to_clique(f)
+        h = g.copy()
 
-        node_mapping = dict(zip(g.nodes(), sorted(g.nodes(), key=lambda k: random.random())))
-        h = nx.relabel_nodes(g, node_mapping)
-        #
+        G = ig.Graph.from_networkx(g)
+
         # while True:
         #     double_edge_swap(h, max_tries=1000, nswap=1)
         #     if not nx.is_isomorphic(g, h):
         #         break
+        #
+        # H = ig.Graph.from_networkx(h)
+        # mapping = H.vs.indices
+        # random.shuffle(mapping)
+        # H = H.permute_vertices(mapping)
 
-        G = ig.Graph.from_networkx(g)
-        H = ig.Graph.from_networkx(h)
+        # D = ig.Graph.from_networkx(g)
+        # mapping = D.vs.indices
+        # random.shuffle(mapping)
+        # D = D.permute_vertices(mapping)
 
-        yes += solve(G, N * M, g) == solve(H, N * M, h)
+        mg = multipass(G)
+        # yes += mg == multipass(H)
+        # no += mg == multipass(D)
 
+        z = Counter(mg).most_common()[-1][1]
+        mx.add(z)
 
-    print(yes)
+    print(sorted(mx))
+    print(yes, no)
