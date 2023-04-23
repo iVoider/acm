@@ -15,7 +15,7 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 import igraph as ig
 import networkx as nx
 
-from collections import  Counter
+from collections import Counter
 
 
 def sat_to_clique(formula):
@@ -40,69 +40,71 @@ def sat_to_clique(formula):
     return g, mapping
 
 
-def multipass(m_g):
-    r = list()
-    m_g = m_g.linegraph()
-    for v in m_g.vs.indices:
-        K = m_g.copy()
-        sl = K.vcount()
-        nxt = list()
-        while True:
-            map_ping = K.vs.indices
-            nb = K.vs[v].neighbors()
-            for n in nb:
-                map_ping[n.index] = v
-            K.contract_vertices(map_ping)
-            map_ping = [0] * K.vcount()
-            map_ping[v] = 1
-            nxt.append(ig.VertexClustering(K, map_ping).modularity * len(nb))
-            l = len(K.vs[v].neighbors())
-            if l > sl or l < 2:
-                break
-            break
+def prob(Gr):
+    transition = []
+    for v in Gr.vs:
+        nxt = [0.0] * Gr.vcount()
+        vl = 1.0 / len(v.neighbors())
+        for n in v.neighbors():
+            nxt[n.index] = vl
+        transition.append(nxt)
 
-        r.append(tuple(nxt))
+    transition_matrix = np.array(transition)
+
+    transition_matrix_transp = transition_matrix.T
+    eigenvals, eigenvects = np.linalg.eig(transition_matrix_transp)
+    close_to_1_idx = np.isclose(eigenvals, 1)
+    target_eigenvect = eigenvects[:, close_to_1_idx]
+    target_eigenvect = target_eigenvect[:, 0]
+    stationary_distrib = target_eigenvect / sum(target_eigenvect)
+    return stationary_distrib
+
+
+def multipass(m_g):
+    m_g = m_g.linegraph()
+    r = list()
+    p = prob(m_g)
+    for v in m_g.vs.indices:
+        map_ping = [0] * m_g.vcount()
+        nb = m_g.vs[v].neighbors()
+        for n in nb:
+            map_ping[n.index] = 1
+        m_g[v] = 1
+        r.append(ig.VertexClustering(m_g, map_ping).modularity * p[v].real)
     return sorted(r)
 
 
 if __name__ == '__main__':
-    N = 4
-    M = 7
+    N = 6
+    M = 3
 
-    mx = set()
-
-    yes = 0
-    no = 0
+    yes = list()
 
     for ui in range(0, 1):
-        #f = gen_unsat(N, N * M)
-        f = gen_sat(N, N * M, random_cnf(N))
-        g, k = sat_to_clique(f)
-        h = g.copy()
+        f = gen_unsat(N, N * M)
 
+        # f = gen_sat(N, N * M, random_cnf(N))
+
+        g, k = sat_to_clique(f)
         G = ig.Graph.from_networkx(g)
 
-        # while True:
-        #     double_edge_swap(h, max_tries=1000, nswap=1)
-        #     if not nx.is_isomorphic(g, h):
-        #         break
-        #
-        # H = ig.Graph.from_networkx(h)
-        # mapping = H.vs.indices
-        # random.shuffle(mapping)
-        # H = H.permute_vertices(mapping)
+        h = g.copy()
+        while True:
+            double_edge_swap(h, max_tries=1000, nswap=1)
+            if not nx.is_isomorphic(g, h):
+                break
 
-        # D = ig.Graph.from_networkx(g)
-        # mapping = D.vs.indices
-        # random.shuffle(mapping)
-        # D = D.permute_vertices(mapping)
+        H = ig.Graph.from_networkx(h)
+        mapping = H.vs.indices
+        random.shuffle(mapping)
+        H = H.permute_vertices(mapping)
 
-        mg = multipass(G)
-        # yes += mg == multipass(H)
-        # no += mg == multipass(D)
+        D = ig.Graph.from_networkx(g)
+        mapping = D.vs.indices
+        random.shuffle(mapping)
+        D = D.permute_vertices(mapping)
 
-        z = Counter(mg).most_common()[-1][1]
-        mx.add(z)
-
-    print(sorted(mx))
-    print(yes, no)
+        jk = multipass(G)
+        if jk == multipass(H) or jk != multipass(D):
+            break
+        print(jk)
