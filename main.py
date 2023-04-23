@@ -15,9 +15,6 @@ warnings.simplefilter(action='ignore', category=FutureWarning)
 import igraph as ig
 import networkx as nx
 
-from collections import Counter
-
-
 def sat_to_clique(formula):
     g = nx.Graph()
     mapping = {}
@@ -42,22 +39,26 @@ def sat_to_clique(formula):
 
 def prob(Gr):
     transition = []
+
     for v in Gr.vs:
         nxt = [0.0] * Gr.vcount()
-        vl = 1.0 / len(v.neighbors())
         for n in v.neighbors():
-            nxt[n.index] = vl
+            nxt[n.index] = 1.0
         transition.append(nxt)
 
-    transition_matrix = np.array(transition)
+    Q = np.array(transition)
+    Q = Q/Q.sum(axis=1, keepdims=1)
 
-    transition_matrix_transp = transition_matrix.T
-    eigenvals, eigenvects = np.linalg.eig(transition_matrix_transp)
-    close_to_1_idx = np.isclose(eigenvals, 1)
-    target_eigenvect = eigenvects[:, close_to_1_idx]
-    target_eigenvect = target_eigenvect[:, 0]
-    stationary_distrib = target_eigenvect / sum(target_eigenvect)
-    return stationary_distrib
+    evals, evecs = np.linalg.eig(Q.T)
+    evec1 = evecs[:, np.isclose(evals, 1)]
+    # Since np.isclose will return an array, we've indexed with an array
+    # so we still have our 2nd axis.  Get rid of it, since it's only size 1.
+    evec1 = evec1[:, 0]
+    stationary = evec1 / evec1.sum()
+
+    # eigs finds complex eigenvalues and eigenvectors, so you'll want the real part.
+    stationary = stationary.real
+    return stationary
 
 
 def multipass(m_g):
@@ -75,12 +76,12 @@ def multipass(m_g):
 
 
 if __name__ == '__main__':
-    N = 6
+    N = 4
     M = 3
 
     yes = list()
 
-    for ui in range(0, 1):
+    for ui in range(0, 100):
         f = gen_unsat(N, N * M)
 
         # f = gen_sat(N, N * M, random_cnf(N))
@@ -106,5 +107,5 @@ if __name__ == '__main__':
 
         jk = multipass(G)
         if jk == multipass(H) or jk != multipass(D):
+            print('shit')
             break
-        print(jk)
