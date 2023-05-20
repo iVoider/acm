@@ -346,3 +346,24 @@ def checksat(f, ass):
         if len(ass & set(c)) == 0:
             return False
     return True
+
+def iso(G, iso = False):
+  G = ig.Graph.from_networkx(G)
+  mapping = G.vs.indices
+  random.shuffle(mapping)
+  G.permute_vertices(mapping)
+  A = G.get_edgelist()
+  for i, e in enumerate(A):
+    if random.random() < 0.5:
+     A[i] = (e[1], e[0])
+     
+  random.shuffle(A)
+  G = nx.Graph(A)
+
+  if iso:
+    return G
+  else:
+    H = G.copy()
+    while nx.is_isomorphic(G, H):
+      directed_edge_swap(H, 1, max_tries = 1000)
+  return H
