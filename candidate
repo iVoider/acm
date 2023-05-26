@@ -1,0 +1,29 @@
+def chkp(g):
+ 
+  G = ig.Graph.from_networkx(g)
+  H = G.complementer(g)
+  id = list(sympy.primerange(0,sympy.prime(G.vcount() + 1)))
+  
+  tact = list()
+  for x,y in itertools.combinations(H.vs.indices, 2):
+    cu = 0
+    for p in H.get_all_shortest_paths(x,to=y):
+     vals = dict([(i,{id[i]}) for i in H.vs.indices])
+     path = set(p)
+     path.add(x)
+     path.add(y)
+     cpath = list(path)
+     i = 36 * 2
+     while path:
+      z = cpath[random.randint(0, len(cpath) - 1)]
+      for n in G.neighbors(z):
+        vals[z] |= vals[n]
+      if z in path and (id[x] in vals[z] and id[y] in vals[z]):
+        path.remove(z)
+      i -= 1
+      if i == 0:
+        break
+     if (i != 0):
+      cu += 1
+    tact.append(cu)
+  return tact
