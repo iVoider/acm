@@ -2,6 +2,11 @@ def chkp(g):
  
   G = ig.Graph.from_networkx(g)
   H = G.complementer(g)
+
+  if G.density() < H.density():
+    Z = H
+    H = G
+    G = Z
   
   tact = list()
   for x,y in itertools.combinations(H.vs.indices, 2):
@@ -25,4 +30,5 @@ def chkp(g):
      if (len(path) == 0):
       cu += 1
     tact.append(cu)
+
   return tact
