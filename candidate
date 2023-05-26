@@ -13,7 +13,7 @@ def chkp(g):
      path.add(x)
      path.add(y)
      cpath = list(path)
-     i = 36 * 2
+     i = G.vcount() * 2
      while path:
       z = cpath[random.randint(0, len(cpath) - 1)]
       for n in G.neighbors(z):
