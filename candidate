@@ -1,14 +1,8 @@
-def chkp(g):
- 
-  G = ig.Graph.from_networkx(g)
-  H = G.complementer(g)
-
-  if G.density() < H.density():
-    Z = H
-    H = G
-    G = Z
+def chkp(G):
+  H = G.complementer()
   
-  tact = list()
+  tact = dict.fromkeys(G.es.indices, 0)
+
   for x,y in itertools.combinations(H.vs.indices, 2):
     cu = 0
     for p in H.get_all_shortest_paths(x,to=y):
@@ -29,6 +23,9 @@ def chkp(g):
       
      if (len(path) == 0):
       cu += 1
-    tact.append(cu)
+    to = G.get_eid(x,y, error = False)
+    if to != -1:
+     tact[to] = cu
 
-  return tact
+  return frozenset(Counter(tact.values()).most_common())
+
