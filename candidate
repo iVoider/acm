@@ -1,31 +1,73 @@
+#@title Algorithm
+
+def are_isomorphic(G, H):
+  chkp(G)
+  print()
+  chkp(H)
+
+def multipass(m_g):
+    r = list()
+    m_g = m_g.linegraph()
+    for v in m_g.vs.indices:
+        map_ping = [0] * m_g.vcount()
+        nb = m_g.vs[v].neighbors()
+        for n in nb:
+            map_ping[n.index] = 1
+        map_ping[v] = 1
+        r.append(ig.VertexClustering(m_g, map_ping).modularity)
+    return Counter(r).most_common()
+
 def chkp(G):
+
   H = G.complementer()
-  
+  if H.density() > G.density():
+    Z = G
+    G = H
+    H = G
   tact = dict.fromkeys(G.es.indices, 0)
 
-  for x,y in itertools.combinations(H.vs.indices, 2):
-    cu = 0
-    for p in H.get_all_shortest_paths(x,to=y):
-     vals = dict([(i,{i}) for i in H.vs.indices])
-     path = set(p)
-
-     for z in p:
-      for n in G.neighbors(z):
-        vals[z] |= vals[n]
-      if z in path and (x in vals[z] and y in vals[z]):
-        path.remove(z)
-
-     for z in reversed(p):
-      for n in G.neighbors(z):
-        vals[z] |= vals[n]
-      if z in path and (x in vals[z] and y in vals[z]):
-        path.remove(z)
+  for e in G.es:
+     x = e.source
+     y = e.target
+     cu = 0
+     p = None
+     for p in H.get_all_shortest_paths(x,to=y):
       
-     if (len(path) == 0):
-      cu += 1
-    to = G.get_eid(x,y, error = False)
-    if to != -1:
-     tact[to] = cu
+      vals = dict([(i,{i}) for i in H.vs.indices])
+      path = set(p)
+      sath = path.copy()
 
-  return frozenset(Counter(tact.values()).most_common())
+      for z in p:
+       for n in G.neighbors(z):
+         vals[z] |= vals[n]
+       if z in path and (x in vals[z] and y in vals[z]):
+         path.remove(z)
 
+      for z in reversed(p):
+       for n in G.neighbors(z):
+         vals[z] |= vals[n]
+       if z in path and (x in vals[z] and y in vals[z]):
+         path.remove(z)
+      
+      if len(path) == 0:
+       cu += 1
+    
+     tact[e.index] = (cu, 0 if p is None else len(p))
+
+  z = {i: [j[0] for j in j] for i, j in itertools.groupby(sorted(tact.items(), key = lambda x : x[1]), lambda x : x[1])}
+  
+  subs = list()
+  for k in z:
+    T = ig.Graph()
+    T.add_vertices(G.vs.indices)
+    for i in z[k]:
+     T.add_edge(G.es[i].source, G.es[i].target)
+    T.vs.select(_degree=0).delete()
+    subs.append(T)
+
+    print(k, multipass(T))
+    print(k, multipass(T.complementer()))
+
+    print(multipass(G.complementer()))
+    print(multipass(G))
+    print(Counter(tact.values()).most_common())
