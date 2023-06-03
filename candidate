@@ -1,24 +1,25 @@
-def diffactor(G, weights = None):
+def diffactor(G):
+    while True:
+     a = leidenalg.find_partition(G.complementer(), leidenalg.ModularityVertexPartition, n_iterations=-1, max_comm_size=3, seed = random.randint(0, 2048))
+     ka = Counter(a.membership).most_common()[-1][1]
+     if ka == 3:
+       break
     
-    r = list()
-
-    for e in G.es:
-        H = G.copy()
-        map_ping = G.vs.indices
-        for n in G.vs[e.source].neighbors():
-           map_ping[n.index] = e.target
-
-        for n in G.vs[e.target].neighbors():
-           map_ping[n.index] = e.source
-
-        H.contract_vertices(map_ping)
-
-        map_ping = [0] * (H.vcount())
-        map_ping[e.target] = 1
-        map_ping[e.source] = 2
-        if weights == None:
-         r.append(ig.VertexClustering(H, map_ping).modularity)
-        else:
-         r.append(ig.VertexClustering(H, map_ping, modularity_params = { 'weight' : weights}).modularity)
+    e = set()
+    for c in G.largest_cliques():
+      e = e | set(c)
     
-    return r
+    lst = [[] for j in set(a.membership)]
+    for i, m in enumerate(a.membership):
+      lst[m].append(i)
+    
+    for l in lst:
+      fnd = False
+      for x in l:
+        if x in e:
+          fnd = True
+          break
+      if not fnd:
+        print("Shit", ka)
+    
+    return ka
