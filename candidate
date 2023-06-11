@@ -1,122 +1,30 @@
-def indrogen(G, N, M):
-   
-   pos = set()
-   for c in G.largest_cliques():
-    pos |= set(c)
-
-   mems = {}
-   part = None
-   for _ in range(0, 32):
-    H = G.copy()
-    mem = leidenalg.find_partition(H, leidenalg.ModularityVertexPartition, n_iterations=-1, max_comm_size=M, seed = random.randint(0, 2048), 
-                                   initial_membership=None).membership
-    lst = [[] for j in set(mem)]
-    for i, m in enumerate(mem):
-       lst[m].append(i)
-   
-    cng, lst = diffactor(H, N, M, lst)
-
-    mem = [0] * H.vcount()
-
-    for i, l in enumerate(lst):
-      for e in l:
-        mem[e] = i
-        for n in H.neighbors(e):
-          if n not in l:
-            id = H.get_eid(e, n, error = False)
-            if id != -1:
-              H.delete_edges(id)
+def diffactor(G):
     
-    mems[tuple(mem)] = H
-    part, modu = leidenalg.find_partition_multiplex(list(mems.values()), leidenalg.ModularityVertexPartition, n_iterations=-1,
-                                             max_comm_size=M)
-    lst = [[] for j in set(part)]
-    for i, m in enumerate(part):
-       lst[m].append(i)
+    H = ig.Graph()
+
+    connected = set()
+    for e in G.es:
+      connected.add(frozenset({G.vs[e.source]["_nx_name"], G.vs[e.target]["_nx_name"]}))
     
-    for l in lst:
-      if len(l) == 1:
-        if l[0] in pos:
-          return True
-        else:
-          return False
+    roy = []
+    moy = {}
 
-   return False
+    for v in G.vs.indices:
+      moy[G.vs[v]["_nx_name"]] = list()
 
-def diffactor(G, N, M, lst):
+    for i, v in enumerate(G.vs.indices):
+      Z = G.copy()
+      Z.delete_vertices(Z.neighbors(v) + [v])
+      Z.vs.select(_degree=0).delete()
+
+      names = {}
+      for v in Z.vs.indices:
+        H.add_vertex(1)
+        names[v] = H.vcount() - 1
+        roy.append(i)
+        moy[Z.vs[v]["_nx_name"]].append(H.vcount() - 1)
+     
+    for x, y in connected:
+        H.add_edges(itertools.product(moy[x], moy[y]))
     
-    exchange = [([], set()) for j in lst]
-
-    HT = {}
-    for v in G.vs:
-      HT[G.vs[v.index]["_nx_name"]] = v.index
-
-    for index, l in enumerate(lst):
-        z = [G.vs[i]["_nx_name"] for i in l]
-        x,y = zip(*z)
-        a = Counter(x).most_common()
-        b = Counter(y).most_common()
-
-        send = []
-        receive = set()
-
-        var_diff = set()
-        if len(a) > N:
-          for i, j in itertools.combinations(a, 2):
-            if i[0] == j[0] * -1:
-              if i [1] == j[1]:
-                continue
-              var_diff.add(i[0] if i[1] > i[1] else j[0])
-        
-        cur_vars = set(x) - var_diff
-
-        clause_diff = set()
-        cur_clauses = set()
-        if b[0][1] > 1:
-          for i, j in b:
-            if j > 1:
-              clause_diff.add(i)
-            else:
-              cur_clauses.add(i)
-        
-        for i, j in z:
-          if i in var_diff and j in clause_diff:
-            send.insert(0, (i, j))
-          elif i in var_diff or j in clause_diff:
-            send.insert(-1, (i, j))
-        
-        for i, j in itertools.product(cur_vars, cur_clauses):
-          receive.add((i, j))
-        
-        exchange[index] = (send, receive)
-    
-    chng = False
-
-    for i, j in itertools.combinations(range(0, len(lst)), 2):
-      swap_i = set()
-      swap_j = set()
-
-      for e in exchange[i][0]:
-        if e in exchange[j][1]:
-          swap_i.add(e)
-      
-      for e in exchange[j][0]:
-        if e in exchange[i][1]:
-          swap_j.add(e)
-      
-      for s in swap_i:
-        if HT[s] in lst[i]:
-         lst[i].remove(HT[s])
-         chng = True
-        if HT[s] not in lst[j]:
-         lst[j].append(HT[s])
-         chng = True
-      
-      for s in swap_j:
-        if HT[s] in lst[j]:
-         lst[j].remove(HT[s])
-         chng = True
-        if HT[s] not in lst[i]:
-         lst[i].append(HT[s])
-         chng = True
-    return chng, lst
+    return H.complementer().modularity(roy)
