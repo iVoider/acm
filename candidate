@@ -1,30 +1,39 @@
 def diffactor(G):
     
-    H = ig.Graph()
+    r = list()
 
-    connected = set()
     for e in G.es:
-      connected.add(frozenset({G.vs[e.source]["_nx_name"], G.vs[e.target]["_nx_name"]}))
+        H = G.copy()
+        map_ping = G.vs.indices
+        for n in G.vs[e.source].neighbors():
+           map_ping[n.index] = e.target
+
+        for n in G.vs[e.target].neighbors():
+           map_ping[n.index] = e.source
+
+        H.contract_vertices(map_ping)
+
+        map_ping = [0] * (H.vcount())
+        map_ping[e.target] = 1
+        map_ping[e.source] = 0
+        r.append(ig.VertexClustering(H, map_ping).modularity)
     
-    roy = []
-    moy = {}
-
-    for v in G.vs.indices:
-      moy[G.vs[v]["_nx_name"]] = list()
-
-    for i, v in enumerate(G.vs.indices):
-      Z = G.copy()
-      Z.delete_vertices(Z.neighbors(v) + [v])
-      Z.vs.select(_degree=0).delete()
-
-      names = {}
-      for v in Z.vs.indices:
-        H.add_vertex(1)
-        names[v] = H.vcount() - 1
-        roy.append(i)
-        moy[Z.vs[v]["_nx_name"]].append(H.vcount() - 1)
-     
-    for x, y in connected:
-        H.add_edges(itertools.product(moy[x], moy[y]))
+    H = G.copy()
+    H.es["weight"] = r
+    mst_edges = H.spanning_tree(weights=H.es["weight"], return_tree=False)
+    gu = set()
     
-    return H.complementer().modularity(roy)
+    for e in H.es[mst_edges]:
+      gu.add(frozenset({H.vs[e.source]["_nx_name"], H.vs[e.target]["_nx_name"]}))
+    
+    mx = set()
+
+    for c in H.maximal_cliques(min=11, max=11):
+
+      K = H.subgraph(c)
+      mst_edges = K.spanning_tree(weights=K.es["weight"], return_tree=False)
+      hu = set()
+      for e in K.es[mst_edges]:
+       hu.add(frozenset({K.vs[e.source]["_nx_name"], K.vs[e.target]["_nx_name"]}))
+      mx.add(len(hu & gu))
+    return min(mx)
