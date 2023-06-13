@@ -1,6 +1,6 @@
 def diffactor(G):
-    G = G.linegraph()
-    gol = list()
+    gol = {}
+    zol = dict.fromkeys(G.vs.indices, 0)
     for e in G.es:
       x = e.source
       y = e.target
@@ -26,7 +26,6 @@ def diffactor(G):
       total = prev
 
       while prev < G.vcount():
-       q += 1
        tx = teamX.copy()
        ty = teamY.copy()
        for peace in teamM.copy():
@@ -57,6 +56,48 @@ def diffactor(G):
        else:
         prev = total
 
-      gol.append(tuple({ frozenset({len(teamX), len(teamY)}), len(teamM), total}))
+      gol[e.index] = tuple((len(teamX), len(teamY), len(teamM), total))
+      if len(teamX) > len(teamY):
+       zol[x] += 1
+      else:
+       zol[y] += 1
     
-    return gol
+    for v in G.vs.indices:
+      zol[v] = zol[v] / len(G.neighbors(v))
+    
+    print(Counter(zol).most_common())
+
+    rog = dict.fromkeys(G.vs.indices, 0)
+
+    for c in G.largest_cliques():
+      z = {}
+
+      for cl in c:
+        rog[cl] += 1
+
+      for x,y in itertools.combinations(c, 2):
+        
+        if G.es[G.get_eid(x,y)].source not in z:
+          z[G.es[G.get_eid(x,y)].source] = [0,0]
+
+        if G.es[G.get_eid(x,y)].target not in z:
+          z[G.es[G.get_eid(x,y)].target] = [0,0]
+        
+        if gol[G.get_eid(x,y)][0] > gol[G.get_eid(x,y)][1]:
+          z[G.es[G.get_eid(x,y)].source][0] += 1
+        elif gol[G.get_eid(x,y)][0] < gol[G.get_eid(x,y)][1]:
+          z[G.es[G.get_eid(x,y)].target][0] += 1
+        
+        z[G.es[G.get_eid(x,y)].source][1] += 1
+        z[G.es[G.get_eid(x,y)].target][1] += 1
+      
+      r = list()
+      for a,b in z.values():
+          r.append(a / b)
+
+      if 0.0 in r or 1.0 in r:
+        print(rog)
+        return True
+    
+    print(rog)
+    return False
