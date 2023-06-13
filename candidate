@@ -1,39 +1,62 @@
 def diffactor(G):
-    
-    r = list()
-
+    G = G.linegraph()
+    gol = list()
     for e in G.es:
-        H = G.copy()
-        map_ping = G.vs.indices
-        for n in G.vs[e.source].neighbors():
-           map_ping[n.index] = e.target
+      x = e.source
+      y = e.target
 
-        for n in G.vs[e.target].neighbors():
-           map_ping[n.index] = e.source
-
-        H.contract_vertices(map_ping)
-
-        map_ping = [0] * (H.vcount())
-        map_ping[e.target] = 1
-        map_ping[e.source] = 0
-        r.append(ig.VertexClustering(H, map_ping).modularity)
+      teamX = set(G.neighbors(x)) - set(G.neighbors(y))
+      teamY = set(G.neighbors(y)) - set(G.neighbors(x))
+      teamM = set(G.neighbors(x)) & set(G.neighbors(y))
+      teamX.add(x)
+      teamY.add(y)
+      if x in teamY:
+       teamY.remove(x)
     
-    H = G.copy()
-    H.es["weight"] = r
-    mst_edges = H.spanning_tree(weights=H.es["weight"], return_tree=False)
-    gu = set()
+      if y in teamX:
+       teamX.remove(y)
     
-    for e in H.es[mst_edges]:
-      gu.add(frozenset({H.vs[e.source]["_nx_name"], H.vs[e.target]["_nx_name"]}))
+      if y in teamM:
+       teamM.remove(y)
     
-    mx = set()
+      if x in teamM:
+       teamM.remove(x)
+      
+      prev = len(teamX) + len(teamY) + len(teamM)
+      total = prev
 
-    for c in H.maximal_cliques(min=11, max=11):
+      while prev < G.vcount():
+       q += 1
+       tx = teamX.copy()
+       ty = teamY.copy()
+       for peace in teamM.copy():
+        n = set(G.neighbors(peace))
+        a = len(n & tx)
+        b = len(n & ty)
+        if  a > b:
+          teamX.add(peace)
+          teamM.remove(peace)
+        elif a < b:
+          teamY.add(peace)
+          teamM.remove(peace)
+      
+       tx = teamX.copy()
+       ty = teamY.copy()
+       for free in set(G.vs.indices) - (tx | ty | teamM):
+        n = set(G.neighbors(free))
+        a = len(n & tx)
+        b = len(n & ty)
+        if a > b:
+          teamX.add(free)
+        elif a < b:
+          teamY.add(free)
+       
+       total = len(teamX) + len(teamY) + len(teamM)
+       if total == prev:
+        break
+       else:
+        prev = total
 
-      K = H.subgraph(c)
-      mst_edges = K.spanning_tree(weights=K.es["weight"], return_tree=False)
-      hu = set()
-      for e in K.es[mst_edges]:
-       hu.add(frozenset({K.vs[e.source]["_nx_name"], K.vs[e.target]["_nx_name"]}))
-      mx.add(len(hu & gu))
-    return min(mx)
+      gol.append(tuple({ frozenset({len(teamX), len(teamY)}), len(teamM), total}))
+    
+    return gol
