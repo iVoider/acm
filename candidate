@@ -1,7 +1,9 @@
-def diffactor(G):
-    gol = {}
-    zol = dict.fromkeys(G.vs.indices, 0)
+def diffactor(G, k):
+
+    zol = dict.fromkeys(G.es.indices)
+
     for e in G.es:
+      
       x = e.source
       y = e.target
 
@@ -12,16 +14,16 @@ def diffactor(G):
       teamY.add(y)
       if x in teamY:
        teamY.remove(x)
-    
+
       if y in teamX:
        teamX.remove(y)
-    
+
       if y in teamM:
        teamM.remove(y)
-    
+
       if x in teamM:
        teamM.remove(x)
-      
+
       prev = len(teamX) + len(teamY) + len(teamM)
       total = prev
 
@@ -38,7 +40,7 @@ def diffactor(G):
         elif a < b:
           teamY.add(peace)
           teamM.remove(peace)
-      
+
        tx = teamX.copy()
        ty = teamY.copy()
        for free in set(G.vs.indices) - (tx | ty | teamM):
@@ -49,55 +51,34 @@ def diffactor(G):
           teamX.add(free)
         elif a < b:
           teamY.add(free)
-       
+
        total = len(teamX) + len(teamY) + len(teamM)
        if total == prev:
         break
        else:
         prev = total
-
-      gol[e.index] = tuple((len(teamX), len(teamY), len(teamM), total))
-      if len(teamX) > len(teamY):
-       zol[x] += 1
-      else:
-       zol[y] += 1
-    
-    for v in G.vs.indices:
-      zol[v] = zol[v] / len(G.neighbors(v))
-    
-    print(Counter(zol).most_common())
-
-    rog = dict.fromkeys(G.vs.indices, 0)
-
-    for c in G.largest_cliques():
-      z = {}
-
-      for cl in c:
-        rog[cl] += 1
-
-      for x,y in itertools.combinations(c, 2):
-        
-        if G.es[G.get_eid(x,y)].source not in z:
-          z[G.es[G.get_eid(x,y)].source] = [0,0]
-
-        if G.es[G.get_eid(x,y)].target not in z:
-          z[G.es[G.get_eid(x,y)].target] = [0,0]
-        
-        if gol[G.get_eid(x,y)][0] > gol[G.get_eid(x,y)][1]:
-          z[G.es[G.get_eid(x,y)].source][0] += 1
-        elif gol[G.get_eid(x,y)][0] < gol[G.get_eid(x,y)][1]:
-          z[G.es[G.get_eid(x,y)].target][0] += 1
-        
-        z[G.es[G.get_eid(x,y)].source][1] += 1
-        z[G.es[G.get_eid(x,y)].target][1] += 1
       
-      r = list()
-      for a,b in z.values():
-          r.append(a / b)
-
-      if 0.0 in r or 1.0 in r:
-        print(rog)
-        return True
+      zol[e.index] = (len(teamX), len(teamY), len(teamM), total)
     
-    print(rog)
-    return False
+    winrate = dict([(e, [0,0,0]) for e in G.vs.indices])
+    for cl in G.largest_cliques():
+      for c in cl:
+        winrate[c][2] += 1
+      for x, y in itertools.combinations(cl, 2):
+        id = G.get_eid(x, y)
+        ed = G.es[id]
+        res = zol[id]
+        if (res[2] > res[0] and res[2] > res[1]) or res[0] == res[1]:
+          winrate[ed.source][1] += 1
+          winrate[ed.target][1] += 1
+        
+        if res[0] > res[1]:
+          winrate[ed.source][0] += 1
+        elif res[0] < res[1]:
+          winrate[ed.target][0] += 1
+    
+    a,b,c = zip(*winrate.values())
+    if c[a.index(max(a))] == 0:
+     import plotly.express as px
+     fig = px.scatter(x=b, y=a, color = c)
+     fig.show()
