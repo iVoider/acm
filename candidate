@@ -61,33 +61,14 @@ for _ in range(0, 100):
  f = gen_sat(N, M, random_cnf(N)) if satis else gen_unsat(N, M)
  g, k = sat_to_clique(f)
  G = ig.Graph.from_networkx(g)
+ tf, _ = zip(*k.values())
+ wall = dict.fromkeys(tf, 0)
+ m = solve(G)
+ for a, b in reversed(m):
+  for e in a:
+    wall[G.vs[e]["_nx_name"][0]] += b
  
- forbidden = set()
+ a, b = zip(*Counter(wall).most_common())
 
- while G.vcount() > 12:
-   m = solve(G)
-   to = None
-   for e in reversed(m):
-     if len(e[0]) == 1 and G.vs[e[0][0]]["_nx_name"][0] not in forbidden:
-      to = G.vs[e[0][0]]["_nx_name"][0]
-      forbidden.add(to * -1)
-      break
- 
-   if to is None:
-     break
-
-   sub = set()
-   for v in G.vs:
-    if (v["_nx_name"][0] == to * -1):
-     sub.add(v)
-   
-   prev = G.ecount()
-   G.delete_vertices(sub)
-
-   if G.ecount() == prev:
-    break
-
- if G.clique_number() < 9:
-   print(f)
- else:
-   print(G.vcount())
+ if (asol(f, asum = [a[-1]]) == []):
+  print("Shit")
