@@ -1,4 +1,7 @@
-def f_wrapper(G, size, result):
+import math
+import statistics
+
+def f_wrapper(G, result):
     def f(V, s, params=None):
 
         if type(s) == int:
@@ -11,18 +14,29 @@ def f_wrapper(G, size, result):
 
         if s in result:
             return result[s]
-
-        mapping = [0] * G.vcount()
-        for e in s:
-          mapping[e] = 1
-        result[s] = leidenalg.find_partition(G,partition_type=leidenalg.ModularityVertexPartition, n_iterations=0, 
-                                             initial_membership=mapping).modularity * (vars_bad(G, s) +  vars_bad(G, set(G.vs.indices) - set(s)))
+        
+        H = G.copy()
+        ids = set()
+        for h in s:
+          for e in H.neighbors(h):
+            if e not in s:
+              id = H.get_eid(e, h, error = False)
+              if id != -1:
+                ids.add(id)
+                 
+        H.delete_edges(ids)
+        result[s] = oni(H) * -1
         return result[s]
 
     return f
 
+def oni(G):
+  res = list()
+  for p,q in itertools.combinations(list(G.layout_fruchterman_reingold(niter=128)), 2):
+    res.append(math.dist(p, q))
+  return statistics.stdev(res)
 
-def solve(G, size):
+def solve(G):
     result = {}
 
     transition = []
@@ -34,5 +48,60 @@ def solve(G, size):
         transition.append(nxt)
 
     Q = np.array(transition)
-    io = QUEYRANNE(Q, f_wrapper(G, size, result))
+    io = QUEYRANNE(Q, f_wrapper(G, result))
     return io
+
+N = 4
+M = 9
+yes = set()
+no = set()
+color = list()
+
+satis = True
+
+for _ in range(0, 100):
+ f = gen_sat(N, M, random_cnf(N)) if satis else gen_unsat(N, M)
+ g, k = sat_to_clique(f)
+ G = ig.Graph.from_networkx(g)
+ 
+ forbidden = set()
+ forbidden2 = set()
+
+ m = solve(G)
+ to = -1
+ for e in reversed(m):
+     if len(e[0]) == 1 and G.vs[e[0][0]]["_nx_name"][1] not in forbidden and G.vs[e[0][0]]["_nx_name"][0] not in forbidden2:
+      to = G.vs[e[0][0]]["_nx_name"][0]
+      forbidden.add(G.vs[e[0][0]]["_nx_name"][1])
+      forbidden2.add(G.vs[e[0][0]]["_nx_name"][0])
+      break
+ 
+ todel = set()
+ for v in G.vs:
+  if v["_nx_name"][0] * -1 == to:
+   todel.add(v)
+ 
+ G.delete_vertices(todel)
+ G.vs.select(_degree=0).delete()
+
+ m = solve(G)
+ to = -1
+ for e in reversed(m):
+     if len(e[0]) == 1 and G.vs[e[0][0]]["_nx_name"][1] not in forbidden and G.vs[e[0][0]]["_nx_name"][0] not in forbidden2:
+      to = G.vs[e[0][0]]["_nx_name"][0]
+      forbidden.add(G.vs[e[0][0]]["_nx_name"][1])
+      forbidden2.add(G.vs[e[0][0]]["_nx_name"][0])
+      break
+ 
+ todel = set()
+ for v in G.vs:
+  if v["_nx_name"][0] * -1 == to:
+   todel.add(v)
+ 
+ G.delete_vertices(todel)
+ G.vs.select(_degree=0).delete()
+
+ if G.clique_number() < M:
+  print("Shit")
+ else:
+  print("OK")
