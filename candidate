@@ -1,74 +1,64 @@
-import math
-import statistics
 
-def f_wrapper(G, result):
-    def f(V, s, params=None):
+# isomorphsim test - use with line graphs
+def diffactor(G):
 
-        if type(s) == int:
-            s = [list(G.vs.indices)[s]]
-        else:
-            s = list(itertools.chain(*(i if isinstance(i, list) else (i,) for i in s)))
-            s = [list(G.vs.indices)[n] for n in s]
+    zol = list()
 
-        s = tuple(sorted(s))
+    for e in G.es:
+      
+      x = e.source
+      y = e.target
 
-        if s in result:
-            return result[s]
-        
-        H = G.copy()
-        ids = set()
-        for h in s:
-          for e in H.neighbors(h):
-            if e not in s:
-              id = H.get_eid(e, h, error = False)
-              if id != -1:
-                ids.add(id)
-                 
-        H.delete_edges(ids)
-        H.vs.select(_degree=0).delete()
-        result[s] = (oni(H) * -1)
-        return result[s]
+      teamX = set(G.neighbors(x)) - set(G.neighbors(y))
+      teamY = set(G.neighbors(y)) - set(G.neighbors(x))
+      teamM = set(G.neighbors(x)) & set(G.neighbors(y))
+      teamX.add(x)
+      teamY.add(y)
+      if x in teamY:
+       teamY.remove(x)
 
-    return f
+      if y in teamX:
+       teamX.remove(y)
 
-def oni(G):
-  res = list()
-  for p,q in itertools.combinations(list(G.layout_fruchterman_reingold()), 2):
-    res.append(math.dist(p, q))
-  return statistics.stdev(res)
+      if y in teamM:
+       teamM.remove(y)
 
-def solve(G):
-    result = {}
+      if x in teamM:
+       teamM.remove(x)
 
-    transition = []
+      prev = len(teamX) + len(teamY) + len(teamM)
+      total = prev
 
-    for v in G.vs:
-        nxt = [0.0] * G.vcount()
-        for n in v.neighbors():
-            nxt[n.index] = 1.0
-        transition.append(nxt)
+      while prev < G.vcount():
+       tx = teamX.copy()
+       ty = teamY.copy()
+       for peace in teamM.copy():
+        n = set(G.neighbors(peace))
+        a = len(n & tx)
+        b = len(n & ty)
+        if  a > b:
+          teamX.add(peace)
+          teamM.remove(peace)
+        elif a < b:
+          teamY.add(peace)
+          teamM.remove(peace)
 
-    Q = np.array(transition)
-    io = QUEYRANNE(Q, f_wrapper(G, result))
-    return io
+       tx = teamX.copy()
+       ty = teamY.copy()
+       for free in set(G.vs.indices) - (tx | ty | teamM):
+        n = set(G.neighbors(free))
+        a = len(n & tx)
+        b = len(n & ty)
+        if a > b:
+          teamX.add(free)
+        elif a < b:
+          teamY.add(free)
 
-N = 4
-M = 9
-
-satis = True
-
-for _ in range(0, 100):
- f = gen_sat(N, M, random_cnf(N)) if satis else gen_unsat(N, M)
- g, k = sat_to_clique(f)
- G = ig.Graph.from_networkx(g)
- tf, _ = zip(*k.values())
- wall = dict.fromkeys(tf, 0)
- m = solve(G)
- for a, b in reversed(m):
-  for e in a:
-    wall[G.vs[e]["_nx_name"][0]] += b
- 
- a, b = zip(*Counter(wall).most_common())
-
- if (asol(f, asum = [a[-1]]) == []):
-  print("Shit")
+       total = len(teamX) + len(teamY) + len(teamM)
+       if total == prev:
+        break
+       else:
+        prev = total
+      
+      zol.append((frozenset({len(teamX), len(teamY)}), len(teamM), total))
+    return set(Counter(zol).most_common())
