@@ -1,11 +1,9 @@
-
-# isomorphsim test - use with line graphs
 def diffactor(G):
 
-    zol = list()
+    zol = {}
 
     for e in G.es:
-      
+
       x = e.source
       y = e.target
 
@@ -59,6 +57,49 @@ def diffactor(G):
         break
        else:
         prev = total
-      
-      zol.append((frozenset({len(teamX), len(teamY)}), len(teamM), total))
-    return set(Counter(zol).most_common())
+
+      if total < G.vcount():
+        for e in (set(G.vs.indices) - (teamX | teamY | teamM)):
+          zol[G.vs[e]["_nx_name"]] = abs(len(teamX) - len(teamY))
+
+    return sorted(zol.values())
+
+def gen_hard_sat(N, M):
+  f = gen_sat(N, M, random_cnf(N))
+  g, _ = sat_to_clique(f)
+  G = ig.Graph.from_networkx(g)
+  H = None
+
+  while True:
+
+   net = dict.fromkeys(G.es.indices, 0)
+   for c in G.largest_cliques():
+    for x,y in itertools.combinations(c, 2):
+      net[G.get_eid(x, y)] += 1
+  
+   G.delete_edges(min(net, key = net.get))
+
+   if G.clique_number() < M:
+    if len(H.largest_cliques()) == 1:
+     for x,y in itertools.combinations(G.vs.indices, 2):
+      if G.get_eid(x, y, error = False) == -1:
+        G.add_edge(x, y)
+        if G.clique_number() == M - 1:
+           return H, G
+        G.delete_edges(G.get_eid(x, y, error = False))
+      return gen_hard_sat(N, M)
+    else:
+     return gen_hard_sat(N, M)
+   else:
+    H = G.copy()
+
+
+N = 4
+M = 13
+
+for j in range(0, 10):
+  #f = gen_sat(N, M, random_cnf(4))
+  G, H = gen_hard_sat(N, M)
+  print(diffactor(G))
+  print(diffactor(H))
+  print("------")
