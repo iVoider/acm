@@ -61,14 +61,7 @@ def diffactor(G):
       zol[e.index] = abs(len(teamX) - len(teamY))
     return zol
 
-N = 4
-M = 11
-
-for j in range(0, 1000):
-  f = gen_sat(N, M, random_cnf(N))
-  #f = gen_unsat(N, M)
-  g, _ = sat_to_clique(f)
-  G = ig.Graph.from_networkx(g)
+def test(G):
   a = diffactor(G)
 
   dd = dict([(G.vs[i]["_nx_name"], [0,0]) for i in G.vs.indices])
@@ -109,7 +102,7 @@ for j in range(0, 1000):
   
   sb = False
   for a, b in lm:
-     if (a, int(not b)) in rm:
+     if (a, int(not b)) in lm:
         sb = True
         break
   
@@ -118,3 +111,14 @@ for j in range(0, 1000):
         import plotly.express as px
         fig = px.scatter(x=dx, y = dc, color = dc)
         fig.show()
+
+
+N = 4
+M = 16
+
+for j in range(0, 1):
+  f = gen_sat(N, M, random_cnf(N))
+  #f = gen_unsat(N, M)
+  g, _ = sat_to_clique(f)
+  G = ig.Graph.from_networkx(g)
+  test(G)
