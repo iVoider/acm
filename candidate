@@ -61,109 +61,40 @@ def diffactor(G):
       zol[e.index] = abs(len(teamX) - len(teamY))
     return sorted(zol.values())
 
-def gen_hard_sat(N, M):
-  f = gen_sat(N, M, random_cnf(N))
-  g, _ = sat_to_clique(f)
-  G = ig.Graph.from_networkx(g)
-  H = None
-
-  while True:
-
-   net = dict.fromkeys(G.es.indices, 0)
-   for c in G.largest_cliques():
-    for x,y in itertools.combinations(c, 2):
-      net[G.get_eid(x, y)] += 1
-
-   G.delete_edges(min(net, key = net.get))
-
-   if G.clique_number() < M:
-    if len(H.largest_cliques()) == 1:
-     for x,y in itertools.combinations(G.vs.indices, 2):
-      if G.get_eid(x, y, error = False) == -1:
-        G.add_edge(x, y)
-        if G.clique_number() == M - 1:
-           return H, G
-        G.delete_edges(G.get_eid(x, y, error = False))
-      return gen_hard_sat(N, M)
-    else:
-     return gen_hard_sat(N, M)
-   else:
-    H = G.copy()
-
-def gen_hard_sat2(N, M):
-  f = gen_sat(N, M, random_cnf(N))
-  g, _ = sat_to_clique(f)
-  G = ig.Graph.from_networkx(g)
-  H = None
-
-  while True:
-
-   net = dict.fromkeys(G.es.indices, 0)
-   for c in G.largest_cliques():
-    for x,y in itertools.combinations(c, 2):
-      net[G.get_eid(x, y)] += 1
-
-   H = G.copy()
-   G.delete_edges(max(net, key = net.get))
-
-   if G.clique_number() < M:
-    if len(H.largest_cliques()) > 1 and len(G.largest_cliques()) > 1:
-     for x,y in itertools.combinations(G.vs.indices, 2):
-      if G.get_eid(x, y, error = False) == -1:
-        G.add_edge(x, y)
-        if G.clique_number() == M - 1:
-           return H, G
-        G.delete_edges(G.get_eid(x, y, error = False))
-      return gen_hard_sat2(N, M)
-    else:
-     return gen_hard_sat2(N, M)
-   else:
-    H = G.copy()
-
-def gen_hard_sat3(N, M):
-  f = gen_sat(N, M, random_cnf(N))
-  g, _ = sat_to_clique(f)
-  G = ig.Graph.from_networkx(g)
-  H = None
-
-  while True:
-
-   net = dict.fromkeys(G.es.indices, 0)
-   for c in G.largest_cliques():
-    for x,y in itertools.combinations(c, 2):
-      net[G.get_eid(x, y)] += 1
-
-   H = G.copy()
-   G.delete_edges(min(net, key = net.get))
-
-   if G.clique_number() == M:
-    if len(H.largest_cliques()) > 1 and len(G.largest_cliques()) > 1:
-     for x,y in itertools.combinations(G.vs.indices, 2):
-      if G.get_eid(x, y, error = False) == -1:
-        G.add_edge(x, y)
-        if G.clique_number() == M:
-           return H, G
-        G.delete_edges(G.get_eid(x, y, error = False))
-      return gen_hard_sat3(N, M)
-    else:
-     return gen_hard_sat3(N, M)
-   else:
-    H = G.copy()
-
-
 N = 4
 M = 16
 
 for j in range(0, 1):
-  #f = gen_sat(N, M, random_cnf(4))
-  # print(len(G.largest_cliques()), G.ecount(), G.vcount())
-  # print(len(H.largest_cliques()), H.ecount(), H.vcount())
+  f = gen_sat(N, M, random_cnf(4))
+  #f = gen_unsat(N, M)
+  g, _ = sat_to_clique(f)
+  G = ig.Graph.from_networkx(g)
   a = diffactor(G)
-  b = diffactor(H)
 
-  print(len(G.largest_cliques()), max(a), G.clique_number())
-  print(len(H.largest_cliques()), max(b), H.clique_number())
+
+  dd = dict([(G.vs[i]["_nx_name"], [0,0]) for i in G.vs.indices])
+
+  # for c in G.largest_cliques():
+  #   for x,y in itertools.combinations(c, 2):
+  #     dd[G.get_eid(x, y, error = False)][1] += 1
+
+  for e in G.es:
+    x = e.source
+    y = e.target
+
+    H = G.copy()
+    H.delete_vertices([x, y])
+
+    dd[G.vs[x]["_nx_name"]][0] += sum(diffactor(H))
+    dd[G.vs[x]["_nx_name"]][1] += len(H.largest_cliques())
+
+    dd[G.vs[y]["_nx_name"]][0] += dd[G.vs[x]["_nx_name"]][0]
+    dd[G.vs[y]["_nx_name"]][1] += dd[G.vs[x]["_nx_name"]][1]
+
+  dx, dy = zip(*dd.values())
 
   import plotly.express as px
-  fig = px.scatter(x=a,y=b)
+  fig = px.scatter(x=dx, y=dy, color = dy)
   fig.show()
+
+  print(sorted(set(dx)))
