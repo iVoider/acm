@@ -62,7 +62,7 @@ def diffactor(G):
     return sorted(zol.values())
 
 N = 4
-M = 16
+M = 20
 
 for j in range(0, 1):
   f = gen_sat(N, M, random_cnf(4))
@@ -71,27 +71,29 @@ for j in range(0, 1):
   G = ig.Graph.from_networkx(g)
   a = diffactor(G)
 
-  dd = dict([(frozenset({G.vs[i.source]["_nx_name"], G.vs[i.target]["_nx_name"]}), [0,0]) for i in G.es])
+  dd = dict([(G.vs[i]["_nx_name"], [float('-inf'),0]) for i in G.vs.indices])
 
-  # for c in G.largest_cliques():
-  #   for x,y in itertools.combinations(c, 2):
-  #     dd[G.get_eid(x, y, error = False)][1] += 1
-  
+  for c in G.largest_cliques():
+    for e in c:
+      dd[G.vs[e]["_nx_name"]][1] = 1
+
   for e in G.es:
     x = e.source
     y = e.target
 
     H = G.copy()
-    H.delete_vertices([x, y])
+    H.delete_edges(e)
     
-    id = frozenset({G.vs[e.source]["_nx_name"], G.vs[e.target]["_nx_name"]})
-    dd[id][0] += sum(diffactor(H))
-    dd[id][1] += len(H.largest_cliques())
+    res = sum(diffactor(H))
 
-  dx, dy = zip(*dd.values())
+    dd[G.vs[x]["_nx_name"]][0] = max(dd[G.vs[x]["_nx_name"]][0], res)
+
+    dd[G.vs[y]["_nx_name"]][0] = max(dd[G.vs[y]["_nx_name"]][0], res)
+
+  dx, dc = zip(*dd.values())
 
   import plotly.express as px
-  fig = px.scatter(x=dx, y=dy, color = dy)
+  fig = px.scatter(x=dx, color = dc)
   fig.show()
 
   print(sorted(set(dx)))
