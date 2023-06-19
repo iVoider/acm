@@ -59,41 +59,62 @@ def diffactor(G):
         prev = total
 
       zol[e.index] = abs(len(teamX) - len(teamY))
-    return sorted(zol.values())
+    return zol
 
 N = 4
-M = 20
+M = 11
 
-for j in range(0, 1):
-  f = gen_sat(N, M, random_cnf(4))
+for j in range(0, 1000):
+  f = gen_sat(N, M, random_cnf(N))
   #f = gen_unsat(N, M)
   g, _ = sat_to_clique(f)
   G = ig.Graph.from_networkx(g)
   a = diffactor(G)
 
-  dd = dict([(G.vs[i]["_nx_name"], [float('-inf'),0]) for i in G.vs.indices])
+  dd = dict([(G.vs[i]["_nx_name"], [0,0]) for i in G.vs.indices])
 
   for c in G.largest_cliques():
     for e in c:
       dd[G.vs[e]["_nx_name"]][1] = 1
 
+  d = diffactor(G)
+
   for e in G.es:
     x = e.source
     y = e.target
-
-    H = G.copy()
-    H.delete_edges(e)
     
-    res = sum(diffactor(H))
+    res = sum(d.values())
 
-    dd[G.vs[x]["_nx_name"]][0] = max(dd[G.vs[x]["_nx_name"]][0], res)
+    dd[G.vs[x]["_nx_name"]][0] += res
 
-    dd[G.vs[y]["_nx_name"]][0] = max(dd[G.vs[y]["_nx_name"]][0], res)
+    dd[G.vs[y]["_nx_name"]][0] += res
 
   dx, dc = zip(*dd.values())
 
-  import plotly.express as px
-  fig = px.scatter(x=dx, color = dc)
-  fig.show()
+  rm = set()
+  lm = set()
 
-  print(sorted(set(dx)))
+  for x,y in zip(dx, dc):
+    if x == max(dx):
+     rm.add((x, y))
+    elif y == min(dx):
+     lm.add((x, y))
+  
+  sa = False
+
+  for a, b in rm:
+     if (a, int(not b)) in rm:
+        sa = True
+        break
+  
+  sb = False
+  for a, b in lm:
+     if (a, int(not b)) in rm:
+        sb = True
+        break
+  
+
+  if sa and sb:
+        import plotly.express as px
+        fig = px.scatter(x=dx, y = dc, color = dc)
+        fig.show()
