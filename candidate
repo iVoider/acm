@@ -2,123 +2,95 @@ def diffactor(G):
 
     zol = {}
 
-    for e in G.es:
+    for x,y,z in itertools.combinations(G.vs.indices, 3):
+      
+      teamX = set(G.neighbors(x)) - set(G.neighbors(y)) - set(G.neighbors(z))
+      teamY = set(G.neighbors(y)) - set(G.neighbors(x)) - set(G.neighbors(z))
+      teamZ = set(G.neighbors(z)) - set(G.neighbors(y)) - set(G.neighbors(x))
+      teamM = set(G.neighbors(x)) & set(G.neighbors(y)) & set(G.neighbors(z))
 
-      x = e.source
-      y = e.target
-
-      teamX = set(G.neighbors(x)) - set(G.neighbors(y))
-      teamY = set(G.neighbors(y)) - set(G.neighbors(x))
-      teamM = set(G.neighbors(x)) & set(G.neighbors(y))
       teamX.add(x)
       teamY.add(y)
+      teamZ.add(z)
+
       if x in teamY:
        teamY.remove(x)
 
       if y in teamX:
        teamX.remove(y)
 
+      if y in teamZ:
+       teamZ.remove(y)
+
+      if x in teamZ:
+       teamZ.remove(x)
+      
+      if z in teamX:
+        teamX.remove(z)
+
+      if z in teamY:
+        teamY.remove(z)
+
       if y in teamM:
        teamM.remove(y)
+
+      if z in teamM:
+       teamM.remove(z)
 
       if x in teamM:
        teamM.remove(x)
 
-      prev = len(teamX) + len(teamY) + len(teamM)
+      prev = len(teamX) + len(teamY) + len(teamZ) + len(teamM)
       total = prev
-
+ 
       while prev < G.vcount():
        tx = teamX.copy()
        ty = teamY.copy()
+       tz = teamZ.copy()
+
        for peace in teamM.copy():
         n = set(G.neighbors(peace))
         a = len(n & tx)
         b = len(n & ty)
-        if  a > b:
+        c = len(n & tz)
+
+        tr = [a, b, c]
+        if len(set(tr)) == 3:
+         if tr.index(max(a, b, c)) == 0:
           teamX.add(peace)
           teamM.remove(peace)
-        elif a < b:
+         elif tr.index(max(a, b, c)) == 1:
           teamY.add(peace)
+          teamM.remove(peace)
+         elif tr.index(max(a, b, c)) == 2:
+          teamZ.add(peace)
           teamM.remove(peace)
 
        tx = teamX.copy()
        ty = teamY.copy()
-       for free in set(G.vs.indices) - (tx | ty | teamM):
+       tz = teamZ.copy()
+
+       for free in set(G.vs.indices) - (tx | ty | tz | teamM):
         n = set(G.neighbors(free))
         a = len(n & tx)
         b = len(n & ty)
-        if a > b:
-          teamX.add(free)
-        elif a < b:
-          teamY.add(free)
+        c = len(n & tz)
 
-       total = len(teamX) + len(teamY) + len(teamM)
+        tr = [a, b, c]
+        if len(set(tr)) == 3:
+         if tr.index(max(a, b, c)) == 0:
+          teamX.add(free)
+         elif tr.index(max(a, b, c)) == 1:
+          teamY.add(free)
+         elif tr.index(max(a, b, c)) == 2:
+          teamZ.add(free)
+
+       total = len(teamX) + len(teamY) + len(teamM) + len(teamZ)
        if total == prev:
         break
        else:
         prev = total
-
-      zol[e.index] = abs(len(teamX) - len(teamY))
-    return zol
-
-def test(G):
-  a = diffactor(G)
-
-  dd = dict([(G.vs[i]["_nx_name"], [0,0]) for i in G.vs.indices])
-
-  for c in G.largest_cliques():
-    for e in c:
-      dd[G.vs[e]["_nx_name"]][1] = 1
-
-  d = diffactor(G)
-
-  for e in G.es:
-    x = e.source
-    y = e.target
     
-    res = sum(d.values())
-
-    dd[G.vs[x]["_nx_name"]][0] += res
-
-    dd[G.vs[y]["_nx_name"]][0] += res
-
-  dx, dc = zip(*dd.values())
-
-  rm = set()
-  lm = set()
-
-  for x,y in zip(dx, dc):
-    if x == max(dx):
-     rm.add((x, y))
-    elif y == min(dx):
-     lm.add((x, y))
-  
-  sa = False
-
-  for a, b in rm:
-     if (a, int(not b)) in rm:
-        sa = True
-        break
-  
-  sb = False
-  for a, b in lm:
-     if (a, int(not b)) in lm:
-        sb = True
-        break
-  
-
-  if sa and sb:
-        import plotly.express as px
-        fig = px.scatter(x=dx, y = dc, color = dc)
-        fig.show()
-
-
-N = 4
-M = 16
-
-for j in range(0, 1):
-  f = gen_sat(N, M, random_cnf(N))
-  #f = gen_unsat(N, M)
-  g, _ = sat_to_clique(f)
-  G = ig.Graph.from_networkx(g)
-  test(G)
+      zol[(x,y,z)] = (frozenset({len(teamY), len(teamX), len(teamZ)}), total)
+    
+    return frozenset(Counter(zol.values()).most_common())
