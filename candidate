@@ -3,7 +3,7 @@ def diffactor(G):
     zol = {}
 
     for x,y,z in itertools.combinations(G.vs.indices, 3):
-      
+
       teamX = set(G.neighbors(x)) - set(G.neighbors(y)) - set(G.neighbors(z))
       teamY = set(G.neighbors(y)) - set(G.neighbors(x)) - set(G.neighbors(z))
       teamZ = set(G.neighbors(z)) - set(G.neighbors(y)) - set(G.neighbors(x))
@@ -24,7 +24,7 @@ def diffactor(G):
 
       if x in teamZ:
        teamZ.remove(x)
-      
+
       if z in teamX:
         teamX.remove(z)
 
@@ -42,7 +42,7 @@ def diffactor(G):
 
       prev = len(teamX) + len(teamY) + len(teamZ) + len(teamM)
       total = prev
- 
+
       while prev < G.vcount():
        tx = teamX.copy()
        ty = teamY.copy()
@@ -90,7 +90,6 @@ def diffactor(G):
         break
        else:
         prev = total
-    
-      zol[(x,y,z)] = (frozenset({len(teamY), len(teamX), len(teamZ)}), total)
-    
+
+      zol[(x,y,z)] = (frozenset(Counter((x,y,z)).most_common()), len(teamM))
     return frozenset(Counter(zol.values()).most_common())
