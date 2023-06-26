@@ -1,8 +1,11 @@
 def diffactor(G):
 
-    zol = {}
+    zol = dict([(v, list()) for v in G.vs.indices])
 
     for x,y,z in itertools.combinations(G.vs.indices, 3):
+
+      if G.get_eid(x,y,error=False) != -1 or G.get_eid(x,z,error=False) != -1 or G.get_eid(z,y, error=False) != -1:
+        continue
 
       teamX = set(G.neighbors(x)) - set(G.neighbors(y)) - set(G.neighbors(z))
       teamY = set(G.neighbors(y)) - set(G.neighbors(x)) - set(G.neighbors(z))
@@ -24,7 +27,7 @@ def diffactor(G):
 
       if x in teamZ:
        teamZ.remove(x)
-
+      
       if z in teamX:
         teamX.remove(z)
 
@@ -42,7 +45,7 @@ def diffactor(G):
 
       prev = len(teamX) + len(teamY) + len(teamZ) + len(teamM)
       total = prev
-
+ 
       while prev < G.vcount():
        tx = teamX.copy()
        ty = teamY.copy()
@@ -90,6 +93,18 @@ def diffactor(G):
         break
        else:
         prev = total
+    
+      zol[x].append((frozenset({len(teamY), len(teamX), len(teamZ)}), total))
+      zol[y].append((frozenset({len(teamY), len(teamX), len(teamZ)}), total))
+      zol[z].append((frozenset({len(teamY), len(teamX), len(teamZ)}), total))
+    
+    cur = {}
 
-      zol[(x,y,z)] = (frozenset(Counter((x,y,z)).most_common()), len(teamM))
-    return frozenset(Counter(zol.values()).most_common())
+    for v in G.vs.indices:
+      frcr = list()
+      frcr += zol[v]
+      for n in G.neighbors(v):
+        frcr += zol[n]
+      cur[v] = frozenset(Counter(frcr).most_common())
+
+    return frozenset(Counter(cur.values()).most_common())
