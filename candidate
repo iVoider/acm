@@ -27,7 +27,7 @@ def diffactor(G):
 
       if x in teamZ:
        teamZ.remove(x)
-      
+
       if z in teamX:
         teamX.remove(z)
 
@@ -45,7 +45,7 @@ def diffactor(G):
 
       prev = len(teamX) + len(teamY) + len(teamZ) + len(teamM)
       total = prev
- 
+
       while prev < G.vcount():
        tx = teamX.copy()
        ty = teamY.copy()
@@ -93,18 +93,50 @@ def diffactor(G):
         break
        else:
         prev = total
-    
-      zol[x].append((frozenset({len(teamY), len(teamX), len(teamZ)}), total))
-      zol[y].append((frozenset({len(teamY), len(teamX), len(teamZ)}), total))
-      zol[z].append((frozenset({len(teamY), len(teamX), len(teamZ)}), total))
-    
-    cur = {}
+
+      zol[x] = len(teamX) - len(teamM)
+      zol[y] = len(teamY) - len(teamM)
+      zol[z] = len(teamZ) - len(teamM)
+
+    cur = dict.fromkeys([-1,-2,-3,-4,1,2,3,4], 0)
 
     for v in G.vs.indices:
-      frcr = list()
+      frcr = 0
       frcr += zol[v]
       for n in G.neighbors(v):
         frcr += zol[n]
-      cur[v] = frozenset(Counter(frcr).most_common())
+      cur[G.vs[v]["_nx_name"][0]] += frcr
 
-    return frozenset(Counter(cur.values()).most_common())
+    return np.product([abs(cur[1]) - abs(cur[-1]), abs(cur[2]) - abs(cur[-2]), abs(cur[3]) - abs(cur[-3]), abs(cur[4]) - abs(cur[-4])])
+
+yes = set()
+no = set()
+
+M = 16
+
+for i in range(0, 10000):
+ f = gen_sat(4, M, random_cnf(4))
+ g, _ = sat_to_clique(f)
+ G = ig.Graph.from_networkx(g)
+ d = diffactor(G)
+ yes.add(d)
+
+for i in range(0, 10000):
+ f = gen_unsat(4, M)
+ g, _ = sat_to_clique(f)
+ G = ig.Graph.from_networkx(g)
+ d = diffactor(G)
+ no.add(d)
+
+print(len(yes), len(no))
+
+print(len(yes & no))
+
+print(len(yes - no),len(no - yes) )
+
+dx = sorted(yes) + sorted(no)
+dy = [1] * len(yes) + [0] * len(no)
+dc = [1] * len(yes) + [0] * len(no)
+import plotly.express as px
+fig = px.scatter(x=dx, y=dy,color=dc)
+fig.show()
