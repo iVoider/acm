@@ -120,23 +120,40 @@ for i in range(0, 1000):
  f = gen_sat(N, M, random_cnf(N))
  g, _ = sat_to_clique(f)
  G = ig.Graph.from_networkx(g)
-
- for ji in range(0, 20):
+ 
+ ite = 0
+ while True:
+  ite += 1
   d = diffactor(G)
   
+  cut = None
+
   for e in d:
    des = G.vs[G.es[e].source]["_nx_name"][1]
    det = G.vs[G.es[e].target]["_nx_name"][1]
    if det not in forbd and des not in forbd:
-    forbd.add(des)
-    forbd.add(det)
-    G.delete_edges(e)
+    cut = frozenset(Counter([G.vs[G.es[e].source]["_nx_name"][0], G.vs[G.es[e].target]["_nx_name"][0]]).most_common())
     break
   
-  # todel = set()
-  # for e in G.es.indices:
-  #   if de == frozenset({G.es[e].source, G.es[e].target}):
-  #     todel.add(de)
-  # G.es.delete_edges(todel)
-   
- assert(G.clique_number() == M)
+  todel = set()
+  for e in G.es.indices:
+    if cut == frozenset(Counter([G.vs[G.es[e].source]["_nx_name"][0], G.vs[G.es[e].target]["_nx_name"][0]]).most_common()):
+      des = G.vs[G.es[e].source]["_nx_name"][1]
+      det = G.vs[G.es[e].target]["_nx_name"][1]
+
+      if det not in forbd and des not in forbd:
+          forbd.add(des)
+          forbd.add(det)
+          todel.add(e)
+
+  if len(todel) == 0:
+    break
+
+  G.delete_edges(todel)
+ 
+ print(ite)
+ if (G.clique_number() != M):
+    print(G.ecount())
+    print(G.vcount())
+    print(G.degree())
+    break
