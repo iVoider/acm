@@ -115,8 +115,8 @@ def diffactor(G):
 # yes = set()
 # no = set()
 
-M = 25
-N = 5
+M = 12
+N = 4
 
 for i in range(0, 1000):
  forbd = set()
@@ -124,12 +124,13 @@ for i in range(0, 1000):
  g, _ = sat_to_clique(f)
  G = ig.Graph.from_networkx(g)
 
- for ji in range(0, 5):
+ for ji in range(0, 20):
   d = diffactor(G)
 
   for e in d:
-   if e not in forbd:
-    forbd.add(e)
+   de = frozenset({G.es[e].source, G.es[e].target})
+   if de not in forbd:
+    forbd.add(de)
     G.delete_edges(e)
     break
    
