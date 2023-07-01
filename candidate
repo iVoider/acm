@@ -106,24 +106,31 @@ def diffactor(G):
     for e in G.es:
       cur[e.index] = zol[e.source] + zol[e.target]
 
-      for n in G.neighbors(e.source):
+      for n in set(G.neighbors(e.source)) &  set(G.neighbors(e.target)):
         cur[e.index] += zol[n]
       
-      for n in G.neighbors(e.target):
-        cur[e.index] += zol[n]
-
-    return max(cur, key = cur.get)
+    a,b = zip(*Counter(cur).most_common())
+    return a
 
 # yes = set()
 # no = set()
 
-M = 18
-N = 4
+M = 25
+N = 5
 
 for i in range(0, 1000):
+ forbd = set()
  f = gen_sat(N, M, random_cnf(N))
  g, _ = sat_to_clique(f)
  G = ig.Graph.from_networkx(g)
- d = diffactor(G)
- G.delete_edges(d)
+
+ for ji in range(0, 5):
+  d = diffactor(G)
+
+  for e in d:
+   if e not in forbd:
+    forbd.add(e)
+    G.delete_edges(e)
+    break
+   
  assert(G.clique_number() == M)
