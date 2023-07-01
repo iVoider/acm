@@ -112,9 +112,6 @@ def diffactor(G):
     a,b = zip(*Counter(cur).most_common())
     return a
 
-# yes = set()
-# no = set()
-
 M = 12
 N = 4
 
@@ -126,12 +123,20 @@ for i in range(0, 1000):
 
  for ji in range(0, 20):
   d = diffactor(G)
-
+  
   for e in d:
-   de = frozenset({G.es[e].source, G.es[e].target})
-   if de not in forbd:
-    forbd.add(de)
+   des = G.vs[G.es[e].source]["_nx_name"][1]
+   det = G.vs[G.es[e].target]["_nx_name"][1]
+   if det not in forbd and des not in forbd:
+    forbd.add(des)
+    forbd.add(det)
     G.delete_edges(e)
     break
+  
+  # todel = set()
+  # for e in G.es.indices:
+  #   if de == frozenset({G.es[e].source, G.es[e].target}):
+  #     todel.add(de)
+  # G.es.delete_edges(todel)
    
  assert(G.clique_number() == M)
