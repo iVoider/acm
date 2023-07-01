@@ -107,6 +107,9 @@ def diffactor(G):
     for e in G.es:
 
       el = frozenset({G.vs[e.source]["_nx_name"][0], G.vs[e.target]["_nx_name"][0]})
+      
+      if len(el) != 1:
+        continue
 
       if el not in curv:
         curv[el] = 0
@@ -127,37 +130,36 @@ def diffactor(G):
     for k in curv:
 
       cur[k] = curv[k]
-
-    return functools.reduce((lambda x, y: x * y), cur.values())
+      if cur[k] == 0:
+        cur[k] = 1
+    
+    res = functools.reduce((lambda x, y: x * y), (cur.values()))
+    return res
 
 yes = set()
 no = set()
 
-M = 16
+N = 5
+M = N * 4
 
 for i in range(0, 1000):
- f = gen_sat(4, M, random_cnf(4))
+ f = gen_sat(N, M, random_cnf(N))
  g, _ = sat_to_clique(f)
  G = ig.Graph.from_networkx(g)
  d = diffactor(G)
- yes.add(math.log(abs(d)) * -1 if d < 0 else 1)
+ if d < 0:
+  yes.add(math.log(abs(d)))
 
 for i in range(0, 1000):
- f = gen_unsat(4, M)
+ f = gen_unsat(N, M)
  g, _ = sat_to_clique(f)
  G = ig.Graph.from_networkx(g)
  d = diffactor(G)
- no.add(math.log(abs(d)) * -1 if d < 0 else 1)
+ if d < 0:
+  no.add(math.log(abs(d)))
 
 print(len(yes), len(no))
 
 print(len(yes & no))
 
 print(len(yes - no),len(no - yes) )
-
-dx = sorted(yes) + sorted(no)
-dy = [1] * len(yes) + [0] * len(no)
-dc = [1] * len(yes) + [0] * len(no)
-import plotly.express as px
-fig = px.scatter(x=dy, y=dx,color=dc)
-fig.show()
