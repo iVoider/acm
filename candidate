@@ -1,165 +1,74 @@
-import functools
-import math
+N = 4
+M = 16
 
-def diffactor(G):
+f = gen_sat(N, M, random_cnf(N))
+f = gen_unsat(N, M)
+g, _ = sat_to_clique(f)
+G = ig.Graph.from_networkx(g)
+H = G.copy()
 
-    zol = dict([(v, list()) for v in G.vs.indices])
+routes = {}
+all_paths = {}
 
-    for x,y,z in itertools.combinations(G.vs.indices, 3):
+for x,y in itertools.combinations(G.vs.indices, 2):
+  paths = G.get_shortest_paths(x, to=y, output="epath")
+  routes[(x,y)] = paths[0]
+  all_paths[(x,y)] = paths
 
-      if G.get_eid(x,y,error=False) != -1 or G.get_eid(x,z,error=False) != -1 or G.get_eid(z,y, error=False) != -1:
-        continue
+print(len(routes))
 
-      teamX = set(G.neighbors(x)) - set(G.neighbors(y)) - set(G.neighbors(z))
-      teamY = set(G.neighbors(y)) - set(G.neighbors(x)) - set(G.neighbors(z))
-      teamZ = set(G.neighbors(z)) - set(G.neighbors(y)) - set(G.neighbors(x))
-      teamM = set(G.neighbors(x)) & set(G.neighbors(y)) & set(G.neighbors(z))
+swap = routes.copy()
 
-      teamX.add(x)
-      teamY.add(y)
-      teamZ.add(z)
+while True:
 
-      if x in teamY:
-       teamY.remove(x)
+  routes_status = {}
+  edges_status = dict([(i, []) for i in G.es.indices])
+  cur = 0
+  prev = len(routes)
 
-      if y in teamX:
-       teamX.remove(y)
+  for tup in routes:
+    routes_status[tup] = -1
 
-      if y in teamZ:
-       teamZ.remove(y)
+  while routes_status:
 
-      if x in teamZ:
-       teamZ.remove(x)
+   for tup in routes_status.copy():
+    if cur == len(routes[tup]):
+      del routes[tup]
+      del routes_status[tup]
+    else:
+      routes_status[tup] = routes[tup][cur]
+      edges_status[routes_status[tup]].append(tup)
 
-      if z in teamX:
-        teamX.remove(z)
+   for e in G.es.indices:
+    if len(edges_status[e]) > 1:
+     for stat in edges_status[e]:
+      del routes_status[stat]
+     edges_status[e] = []
 
-      if z in teamY:
-        teamY.remove(z)
+   cur += 1
 
-      if y in teamM:
-       teamM.remove(y)
+  if len(routes) == prev:
+    break
 
-      if z in teamM:
-       teamM.remove(z)
+  prev = routes
 
-      if x in teamM:
-       teamM.remove(x)
+print(len(routes))
 
-      prev = len(teamX) + len(teamY) + len(teamZ) + len(teamM)
-      total = prev
+p = set()
+for tup in routes:
+   if G.get_eid(tup[0], tup[1], error=False) == -1:
+      p.add(tup[0])
+      p.add(tup[1])
 
-      while prev < G.vcount():
-       tx = teamX.copy()
-       ty = teamY.copy()
-       tz = teamZ.copy()
+p = p
+print(len(p))
 
-       for peace in teamM.copy():
-        n = set(G.neighbors(peace))
-        a = len(n & tx)
-        b = len(n & ty)
-        c = len(n & tz)
 
-        tr = [a, b, c]
-        if len(set(tr)) == 3:
-         if tr.index(max(a, b, c)) == 0:
-          teamX.add(peace)
-          teamM.remove(peace)
-         elif tr.index(max(a, b, c)) == 1:
-          teamY.add(peace)
-          teamM.remove(peace)
-         elif tr.index(max(a, b, c)) == 2:
-          teamZ.add(peace)
-          teamM.remove(peace)
+szn = set()
+for c in H.largest_cliques():
+  tar = set()
+  for x,y in itertools.combinations(c, 2):
+      tar.add(H.get_eid(x, y))
+  szn.add((len(p & tar)))
 
-       tx = teamX.copy()
-       ty = teamY.copy()
-       tz = teamZ.copy()
-
-       for free in set(G.vs.indices) - (tx | ty | tz | teamM):
-        n = set(G.neighbors(free))
-        a = len(n & tx)
-        b = len(n & ty)
-        c = len(n & tz)
-
-        tr = [a, b, c]
-        if len(set(tr)) == 3:
-         if tr.index(max(a, b, c)) == 0:
-          teamX.add(free)
-         elif tr.index(max(a, b, c)) == 1:
-          teamY.add(free)
-         elif tr.index(max(a, b, c)) == 2:
-          teamZ.add(free)
-
-       total = len(teamX) + len(teamY) + len(teamM) + len(teamZ)
-       if total == prev:
-        break
-       else:
-        prev = total
-
-      zol[x] = len(teamX) - len(teamM)
-      zol[y] = len(teamY) - len(teamM)
-      zol[z] = len(teamZ) - len(teamM)
-
-    curv = {}
-    curc = {}
-
-    for e in G.es:
-
-      el = frozenset({G.vs[e.source]["_nx_name"][0], G.vs[e.target]["_nx_name"][0]})
-      
-      if len(el) != 1:
-        continue
-
-      if el not in curv:
-        curv[el] = 0
-
-      if el not in curc:
-        curc[el] = 0
-      
-      curc[el] += 1
-
-      v = zol[e.source] + zol[e.target]
-
-      for n in set(G.neighbors(e.source)) & set(G.neighbors(e.target)):
-            v += zol[n]
-
-      curv[el] = v
-    
-    cur = {}
-    for k in curv:
-
-      cur[k] = curv[k]
-      if cur[k] == 0:
-        cur[k] = 1
-    
-    res = functools.reduce((lambda x, y: x * y), (cur.values()))
-    return res
-
-yes = set()
-no = set()
-
-N = 5
-M = N * 4
-
-for i in range(0, 1000):
- f = gen_sat(N, M, random_cnf(N))
- g, _ = sat_to_clique(f)
- G = ig.Graph.from_networkx(g)
- d = diffactor(G)
- if d < 0:
-  yes.add(math.log(abs(d)))
-
-for i in range(0, 1000):
- f = gen_unsat(N, M)
- g, _ = sat_to_clique(f)
- G = ig.Graph.from_networkx(g)
- d = diffactor(G)
- if d < 0:
-  no.add(math.log(abs(d)))
-
-print(len(yes), len(no))
-
-print(len(yes & no))
-
-print(len(yes - no),len(no - yes) )
+print((szn))
