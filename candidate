@@ -1,25 +1,13 @@
-N = 4
-M = 16
+def kern(G):
+ routes = {}
 
-f = gen_sat(N, M, random_cnf(N))
-f = gen_unsat(N, M)
-g, _ = sat_to_clique(f)
-G = ig.Graph.from_networkx(g)
-H = G.copy()
+ for x,y in itertools.combinations(G.vs.indices, 2):
+   paths = G.get_shortest_paths(x, to=y, output="epath")
+   routes[(x,y)] = random.choice(paths)
 
-routes = {}
-all_paths = {}
+ swap = routes.copy()
 
-for x,y in itertools.combinations(G.vs.indices, 2):
-  paths = G.get_shortest_paths(x, to=y, output="epath")
-  routes[(x,y)] = paths[0]
-  all_paths[(x,y)] = paths
-
-print(len(routes))
-
-swap = routes.copy()
-
-while True:
+ while True:
 
   routes_status = {}
   edges_status = dict([(i, []) for i in G.es.indices])
@@ -42,7 +30,7 @@ while True:
    for e in G.es.indices:
     if len(edges_status[e]) > 1:
      for stat in edges_status[e]:
-      del routes_status[stat]
+       del routes_status[stat]
      edges_status[e] = []
 
    cur += 1
@@ -52,23 +40,69 @@ while True:
 
   prev = routes
 
-print(len(routes))
+ todel = set()
+ todel1 = set()
+ 
+ i = 0
 
-p = set()
-for tup in routes:
-   if G.get_eid(tup[0], tup[1], error=False) == -1:
-      p.add(tup[0])
-      p.add(tup[1])
+ for tup in routes:
+     if G.get_eid(tup[0], tup[1], error=False) != -1:
+       if i % 2 == 0:
+        todel.add(tup[1])
+        todel1.add(tup[0])
+       else:
+        todel1.add(tup[1])
+        todel.add(tup[0])
+     i += 1
+ 
+ return todel, todel1
 
-p = p
-print(len(p))
+N = 5
+M = 20
 
+sget = set()
 
-szn = set()
-for c in H.largest_cliques():
-  tar = set()
-  for x,y in itertools.combinations(c, 2):
-      tar.add(H.get_eid(x, y))
-  szn.add((len(p & tar)))
+for _ in range(0, 1000):
+ f = gen_sat(N, M, random_cnf(N))
+ g, _ = sat_to_clique(f)
+ G = ig.Graph.from_networkx(g)
+ tet = set()
+ for c in G.largest_cliques():
+  a = set([G.vs[i]["_nx_name"] for i in c])
+  tet |=a
+ 
+ j = 0
+ while True:
+  td, td1 = kern(G)
+  
+  if len(td) == 0:
+    if G.vcount() == 0 or len(set([G.vs[t]["_nx_name"] for t in td]) & tet) != 0 or len(set([G.vs[t]["_nx_name"] for t in td1]) & tet) != 0:
+     print(G.vcount(), len(tet), len(set([G.vs[t]["_nx_name"] for t in td]) & tet), len(set([G.vs[t]["_nx_name"] for t in td1]) & tet))
+    break
+  
+  H = G.copy()
 
-print((szn))
+  if j % 2 == 0:
+   G.delete_vertices(td)
+  else:
+   G.delete_vertices(td1)
+  G.vs.select(_degree=0).delete()
+  
+  if G.vcount() == 0:
+    H = H.copy()
+    G = H
+    if j % 2 == 0:
+     G.delete_vertices(td1)
+    else:
+     G.delete_vertices(td)
+
+  if G.vcount() == 0:
+     G = H
+     if G.vcount() == 0 or len(set([G.vs[t]["_nx_name"] for t in td]) & tet) != 0 or len(set([G.vs[t]["_nx_name"] for t in td1]) & tet) != 0:
+      print(G.vcount(), len(tet), len(set([G.vs[t]["_nx_name"] for t in td]) & tet), len(set([G.vs[t]["_nx_name"] for t in td1]) & tet))
+     break
+  j += 1
+ 
+ #sget.add((max(tet), H.vcount()))
+
+#print(sget)
