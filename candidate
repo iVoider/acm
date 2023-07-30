@@ -42,7 +42,7 @@ def kern(G):
 
  todel = set()
  todel1 = set()
- 
+
  i = 0
 
  for tup in routes:
@@ -54,11 +54,11 @@ def kern(G):
         todel1.add(tup[1])
         todel.add(tup[0])
      i += 1
- 
+
  return todel, todel1
 
-N = 5
-M = 20
+N = 4
+M = 16
 
 sget = set()
 
@@ -70,16 +70,16 @@ for _ in range(0, 1000):
  for c in G.largest_cliques():
   a = set([G.vs[i]["_nx_name"] for i in c])
   tet |=a
- 
+
  j = 0
  while True:
   td, td1 = kern(G)
-  
+
   if len(td) == 0:
     if G.vcount() == 0 or len(set([G.vs[t]["_nx_name"] for t in td]) & tet) != 0 or len(set([G.vs[t]["_nx_name"] for t in td1]) & tet) != 0:
      print(G.vcount(), len(tet), len(set([G.vs[t]["_nx_name"] for t in td]) & tet), len(set([G.vs[t]["_nx_name"] for t in td1]) & tet))
     break
-  
+
   H = G.copy()
 
   if j % 2 == 0:
@@ -87,7 +87,7 @@ for _ in range(0, 1000):
   else:
    G.delete_vertices(td1)
   G.vs.select(_degree=0).delete()
-  
+
   if G.vcount() == 0:
     H = H.copy()
     G = H
@@ -102,7 +102,3 @@ for _ in range(0, 1000):
       print(G.vcount(), len(tet), len(set([G.vs[t]["_nx_name"] for t in td]) & tet), len(set([G.vs[t]["_nx_name"] for t in td1]) & tet))
      break
   j += 1
- 
- #sget.add((max(tet), H.vcount()))
-
-#print(sget)
