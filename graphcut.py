@@ -1,7 +1,7 @@
-N = 10
+N = 300
 M = N * 4
 
-for _ in range(0, 10):
+for _ in range(0, 1):
   f = gen_sat(N, M, random_cnf(N))
   g, _ = sat_to_clique(f)
   G = ig.Graph.from_networkx(g)
@@ -24,29 +24,18 @@ for _ in range(0, 10):
       global_vals[n] = ap[n].real * 10 /  z * 10
     res[v] = global_vals
 
-  found = False
+  mxs = set()
   for v in G.vs.indices:
-    sub = all_sat[v]
-    cur = set({v})
-    while len(sub) > M:
-     ls = sub - cur
-     val = dict.fromkeys(ls, 0)
-     for n in ls:
-      for z in sub - set({n}):
-         if n in res[z]:
-            val[n] += res[z][n]
-     mx = max(val, key=val.get)
-     cur.add(mx)
-     sub = all_sat[v]
-     for c in cur:
-      sub &= all_sat[c]
-    
-    
-    if len(sub) == M:
-      h = G.subgraph(sub)
-      if h.density() == 1.0:
-        found = True
-        break
-
-  if not found:
-     print('Shit')
+    cur = all_sat[v]
+    choice = set({v})
+    while len(cur) > M:
+      mx = dict.fromkeys(cur - choice, 0)
+      for x, y in itertools.product(cur - choice, choice):
+         if y in res:
+            mx[x] += res[y][x]
+      m = max(mx, key=mx.get)
+      choice.add(m)
+      cur &= all_sat[m]
+    mxs.add(G.subgraph(cur).clique_number())
+    print(max(mxs), M)
+    break
