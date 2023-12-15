@@ -18,20 +18,25 @@ def bry(G):
     cur = set(G.neighbors(v))
     cur.add(v)
     choice = set({v})
-    while len(cur) > M:
-      mx = dict.fromkeys(cur - choice, 0)
-      for x in cur - choice:
+    for zi in range(1, M + 1):
+      mx = dict.fromkeys(cur, 0)
+      for x in cur:
             mx[x] = (sum([ap[i] for i in G.neighbors(x)]) + ap[x])
-      m = max(mx, key=mx.get)
-      choice.add(m)
-      inc = set(G.neighbors(m))
-      inc.add(m)
-      cur &= inc
+      choice = set(sorted(mx, key=mx.get, reverse=True)[0:zi])
+      inc = cur.copy()
+      for c in choice:
+        p = set(G.neighbors(c))
+        p.add(c)
+        inc &= p
+
+      cur = inc.copy()
+
       todel = set()
-      for c in set(G.vs.indices) - cur:
-          todel |= set(G.vs[c].incident())
+      for x in set(G.vs.indices) - cur:
+          todel |= set(G.incident(x))
+
       G.delete_edges(todel)
       ap = aprob(G)
 
-    print(G.subgraph(cur).clique_number(), M)
+    print(G.subgraph(choice).clique_number(), M)
     break
