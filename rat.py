@@ -1,7 +1,7 @@
 def aprob(Gr):
   stationary_distrib = list()
   for v in Gr.vs:
-    stationary_distrib.append(Gr.degree(v) / (2 * G.ecount()))
+    stationary_distrib.append(Gr.degree(v) / (2 * Gr.ecount()))
   return stationary_distrib
 
 def bry(G):
